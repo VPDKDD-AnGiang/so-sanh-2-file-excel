@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tool (KH2959)- Công cụ chạy liên kết đối soát giữa 2 file excel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Roboto+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#132A2E; --paper:#F1F4F1; --panel:#FFFFFF; --line:#D7DED6;
+    --a:#2B5D8C; --a-soft:#E7EEF6; --b:#2F7D5D; --b-soft:#E6F1EB;
+    --ok:#2F7D5D; --ok-soft:#E6F1EB; --bad:#B4442E; --bad-soft:#F7E9E4; --stamp:#B08A2E;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Be Vietnam Pro',sans-serif;line-height:1.5;padding-bottom:60px;}
+  .topbar{background:var(--ink);color:#F1F4F1;padding:20px 24px;border-bottom:4px solid var(--stamp);}
+  .topbar .eyebrow{font-family:'Roboto Mono',monospace;font-size:11px;letter-spacing:2.5px;text-transform:uppercase;color:#B9C7BE;margin-bottom:4px;}
+  .topbar h1{margin:0;font-size:21px;font-weight:800;}
+  .topbar .sub{font-size:13px;color:#B9C7BE;margin-top:4px;}
+  .wrap{max-width:1080px;margin:0 auto;padding:22px 16px;}
+  .stepper{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px;}
+  .stepper button{font-family:'Roboto Mono',monospace;font-size:11.5px;padding:7px 12px;border-radius:2px;border:1px solid var(--line);background:#FAFBF9;color:#96A79C;cursor:not-allowed;}
+  .stepper button.done{background:#fff;color:var(--ink);border-color:#B9C4BC;cursor:pointer;}
+  .stepper button.active{background:var(--ink);color:#fff;border-color:var(--ink);cursor:pointer;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:2px;padding:20px;margin-bottom:16px;}
+  .row{display:flex;gap:16px;flex-wrap:wrap;}
+  .col{flex:1;min-width:280px;}
+  .tag{display:inline-block;font-family:'Roboto Mono',monospace;font-size:11px;font-weight:700;letter-spacing:1px;padding:3px 9px;border-radius:2px;margin-bottom:10px;}
+  .tag.a{background:var(--a-soft);color:var(--a);}
+  .tag.b{background:var(--b-soft);color:var(--b);}
+  .dropzone{border:2px dashed #C6D0C8;border-radius:2px;padding:34px 10px;text-align:center;cursor:pointer;transition:border-color .15s;}
+  .dropzone:hover{border-color:var(--ink);}
+  .dropzone .dzlabel{font-size:13.5px;font-weight:600;color:#4B5A50;}
+  .filemeta{margin-top:10px;font-size:13px;display:flex;align-items:center;gap:6px;}
+  .filemeta .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);}
+  p.help{font-size:13px;color:#5A6B60;margin:0 0 14px;}
+  .rowpick-controls{display:flex;gap:16px;margin-bottom:10px;}
+  .rowpick-controls label{display:flex;flex-direction:column;gap:3px;font-size:12px;}
+  .rowpick-controls input{width:70px;font-family:'Roboto Mono',monospace;padding:5px 7px;border:1px solid var(--line);border-radius:2px;}
+  .preview{max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:2px;}
+  .preview table{width:100%;border-collapse:collapse;font-size:12px;}
+  .preview td{padding:5px 8px;border-bottom:1px solid #EEF1EE;white-space:nowrap;vertical-align:top;}
+  .preview tr.hdr{background:var(--a-soft);}
+  .preview tr.dst{background:var(--b-soft);}
+  .rn{font-family:'Roboto Mono',monospace;color:#96A79C;}
+  .minibtn{font-family:'Roboto Mono',monospace;font-size:10px;padding:3px 6px;border:1px solid var(--line);background:#fff;border-radius:2px;cursor:pointer;margin-right:4px;}
+  .minibtn:hover{background:var(--paper);}
+  .keyrow{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .keyrow span.klabel{font-family:'Roboto Mono',monospace;font-size:11px;width:56px;color:#5A6B60;}
+  select, input[type=number]{font-family:'Be Vietnam Pro',sans-serif;font-size:13.5px;padding:8px 9px;border:1px solid var(--line);border-radius:2px;background:#fff;}
+  select{flex:1;}
+  .removekey{background:none;border:none;color:#96A79C;cursor:pointer;padding:6px;font-size:16px;line-height:1;}
+  .removekey:hover{color:var(--bad);}
+  .addkey{font-family:'Roboto Mono',monospace;font-size:11.5px;padding:6px 12px;border:1px solid var(--line);border-radius:2px;background:#fff;cursor:pointer;}
+  .addkey:disabled{opacity:.3;cursor:not-allowed;}
+  .choice{padding:9px 16px;border-radius:2px;border:1px solid var(--line);background:#fff;font-size:13px;font-weight:600;cursor:pointer;color:#4B5A50;}
+  .choice.selA{background:var(--a);color:#fff;border-color:var(--a);}
+  .choice.selB{background:var(--b);color:#fff;border-color:var(--b);}
+  .choice.selDark{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .outcols{max-height:260px;overflow:auto;padding-right:4px;}
+  .outcols label{display:flex;gap:8px;align-items:center;font-size:13px;padding:3px 0;cursor:pointer;}
+  .actions{display:flex;justify-content:space-between;margin-top:18px;}
+  button.nav{font-family:'Be Vietnam Pro',sans-serif;font-weight:700;font-size:13.5px;padding:10px 20px;border-radius:2px;border:1px solid var(--ink);background:var(--ink);color:#fff;cursor:pointer;}
+  button.nav.ghost{background:transparent;color:var(--ink);}
+  button.nav:disabled{opacity:.3;cursor:not-allowed;}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;}
+  .statbox{border:1px solid var(--line);border-radius:2px;padding:14px;text-align:center;background:#fff;}
+  .statbox.ok{background:var(--ok-soft);border-color:#BFE0CD;}
+  .statbox.bad{background:var(--bad-soft);border-color:#EFC8BB;}
+  .statbox .n{font-family:'Roboto Mono',monospace;font-size:22px;font-weight:700;}
+  .statbox.ok .n{color:var(--ok);}
+  .statbox.bad .n{color:var(--bad);}
+  .statbox .l{font-size:11px;color:#5A6B60;margin-top:4px;}
+  .resulthead{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);}
+  .exportbtn{font-family:'Roboto Mono',monospace;font-weight:700;font-size:12.5px;padding:9px 16px;border-radius:2px;border:none;background:var(--stamp);color:#26200A;cursor:pointer;}
+  .exportbtn:hover{background:#C79B34;}
+  .resulttable{max-height:400px;overflow:auto;}
+  .resulttable table{width:100%;border-collapse:collapse;font-size:12px;}
+  .resulttable th{position:sticky;top:0;background:var(--paper);text-align:left;padding:8px 10px;font-family:'Roboto Mono',monospace;font-weight:700;border-bottom:1px solid var(--line);white-space:nowrap;}
+  .resulttable td{padding:6px 10px;border-bottom:1px solid #EEF1EE;white-space:nowrap;}
+  .badge{font-family:'Roboto Mono',monospace;font-size:10.5px;padding:2px 8px;border-radius:2px;}
+  .badge.ok{background:var(--ok-soft);color:var(--ok);}
+  .badge.bad{background:var(--bad-soft);color:var(--bad);}
+  .errbox{background:var(--bad-soft);border:1px solid #EFC8BB;color:var(--bad);padding:10px 14px;border-radius:2px;font-size:13px;margin-bottom:14px;}
+  @media (max-width:720px){.stats{grid-template-columns:repeat(2,1fr);}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="eyebrow">Công cụ đối soát dữ liệu</div>
+  <h1>Tool (KH2959)- Công cụ chạy liên kết đối soát giữa 2 file excel</h1>
+  <div class="sub">Chọn khóa liên kết tùy ý, chọn cột giữ lại, xuất file kết quả đối soát</div>
+  <div class="sub" style="margin-top:2px;">Nguồn: Phòng CSDL - Văn phòng đăng ký đất đai tỉnh An Giang</div>
+</div>
+
+<div class="wrap">
+  <div class="stepper" id="stepper"></div>
+  <div id="errbox"></div>
+  <div id="content"></div>
+</div>
+
+<script>
+// ---------- state ----------
+const emptyFile = tag => ({tag, name:'', rawRows:[], headerRow:1, dataStartRow:2});
+const state = {
+  step: 1,
+  fileA: emptyFile('A'),
+  fileB: emptyFile('B'),
+  keySlots: [{aCol:'', bCol:''}],
+  useBackbone: 'yes',
+  baseFile: 'A',
+  dedupeBase: 'keep',
+  selectedOutA: [],
+  selectedOutB: [],
+  result: null,
+  error: ''
+};
+const STEPS = [
+  {n:1, label:'Tải file'},
+  {n:2, label:'Dòng tiêu đề & dữ liệu'},
+  {n:3, label:'Khóa liên kết'},
+  {n:4, label:'Cột kết quả & file nền'},
+  {n:5, label:'Kết quả & xuất file'}
+];
+
+// ---------- helpers ----------
+function getColumns(f){
+  if(!f.rawRows.length) return [];
+  const headerArr = f.rawRows[f.headerRow-1] || [];
+  let maxLen = headerArr.length;
+  f.rawRows.slice(0,15).forEach(r=>{ if(r && r.length>maxLen) maxLen=r.length; });
+  return Array.from({length:maxLen},(_,i)=>({
+    index:i,
+    name: (headerArr[i]!==undefined && String(headerArr[i]).trim()!=='') ? String(headerArr[i]) : `Cột ${i+1}`
+  }));
+}
+function normalize(v){
+  if(v===null||v===undefined) return '';
+  return String(v).trim().toLowerCase().replace(/\s+/g,' ');
+}
+function readExcelFile(file){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = evt => {
+      try{
+        const data = new Uint8Array(evt.target.result);
+        const wb = XLSX.read(data,{type:'array'});
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const aoa = XLSX.utils.sheet_to_json(ws,{header:1, defval:''});
+        resolve(aoa);
+      }catch(err){reject(err);}
+    };
+    reader.onerror = () => reject(new Error('Không thể đọc file'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function colLabel(tag, columns, idx){
+  const col = columns.find(c=>c.index===idx);
+  return `[${tag}] ${col ? col.name : 'Cột '+(idx+1)}`;
+}
+function setError(msg){ state.error = msg; renderError(); }
+
+// ---------- render dispatcher ----------
+function render(){
+  renderStepper();
+  renderError();
+  const c = document.getElementById('content');
+  if(state.step===1) c.innerHTML = tplStep1();
+  else if(state.step===2) c.innerHTML = tplStep2();
+  else if(state.step===3) c.innerHTML = tplStep3();
+  else if(state.step===4) c.innerHTML = tplStep4();
+  else if(state.step===5) c.innerHTML = tplStep5();
+}
+function renderError(){
+  const box = document.getElementById('errbox');
+  box.innerHTML = state.error ? `<div class="errbox">⚠ ${esc(state.error)}</div>` : '';
+}
+function renderStepper(){
+  const el = document.getElementById('stepper');
+  el.innerHTML = STEPS.map(s=>{
+    let cls = 'button';
+    let extra = 'disabled';
+    if(s.n===state.step){ extra=''; }
+    if(s.n<state.step){ extra=''; }
+    let cssCls = s.n===state.step ? 'active' : (s.n<state.step ? 'done' : '');
+    return `<button class="${cssCls}" data-action="goto" data-step="${s.n}" ${s.n>state.step?'disabled':''}>${s.n}. ${esc(s.label)}</button>`;
+  }).join('<span style="width:6px"></span>');
+}
+
+// ---------- templates ----------
+function tplStep1(){
+  const cardA = fileUploadCard(state.fileA,'A','a');
+  const cardB = fileUploadCard(state.fileB,'B','b');
+  const canNext = state.fileA.rawRows.length>0 && state.fileB.rawRows.length>0;
+  return `
+    <div class="row">
+      <div class="col panel">${cardA}</div>
+      <div class="col panel">${cardB}</div>
+    </div>
+    <div class="actions" style="justify-content:flex-end;">
+      <button class="nav" data-action="goto" data-step="2" ${canNext?'':'disabled'}>Tiếp theo →</button>
+    </div>`;
+}
+function fileUploadCard(f, tag, cls){
+  return `
+    <span class="tag ${cls}">FILE ${tag}</span>
+    <label class="dropzone" style="display:block;">
+      <div class="dzlabel">${f.name? 'Chọn file khác' : 'Chọn file Excel / CSV'}</div>
+      <input type="file" accept=".xlsx,.xls,.csv" style="display:none;" data-action="upload" data-which="${tag}">
+    </label>
+    ${f.name ? `<div class="filemeta"><span class="dot"></span><strong>${esc(f.name)}</strong><span style="color:#96A79C;font-family:'Roboto Mono',monospace;">(${f.rawRows.length} dòng)</span></div>` : ''}
+  `;
+}
+
+function tplStep2(){
+  const canNext = state.fileA.dataStartRow>state.fileA.headerRow && state.fileB.dataStartRow>state.fileB.headerRow;
+  return `
+    <p class="help">Chọn dòng chứa tên cột (tiêu đề) và dòng đầu tiên của dữ liệu cần so sánh cho từng file.</p>
+    <div class="row">
+      <div class="col panel">${rowPicker(state.fileA,'A','a')}</div>
+      <div class="col panel">${rowPicker(state.fileB,'B','b')}</div>
+    </div>
+    <div class="actions">
+      <button class="nav ghost" data-action="goto" data-step="1">← Quay lại</button>
+      <button class="nav" data-action="goto" data-step="3" ${canNext?'':'disabled'}>Tiếp theo →</button>
+    </div>`;
+}
+function rowPicker(f, tag, cls){
+  const preview = f.rawRows.slice(0,12);
+  const rows = preview.map((row,i)=>{
+    const rn = i+1;
+    const trCls = rn===f.headerRow ? 'hdr' : (rn===f.dataStartRow ? 'dst' : '');
+    return `<tr class="${trCls}">
+      <td class="rn">${rn}</td>
+      <td>${esc((row||[]).slice(0,6).join(' | ')||'—')}</td>
+      <td>
+        <button class="minibtn" data-action="setHeader" data-which="${tag}" data-row="${rn}">Đặt tiêu đề</button>
+        <button class="minibtn" data-action="setDataStart" data-which="${tag}" data-row="${rn}">Đặt bắt đầu DL</button>
+      </td>
+    </tr>`;
+  }).join('');
+  return `
+    <span class="tag ${cls}">FILE ${tag} — ${esc(f.name)}</span>
+    <div class="rowpick-controls">
+      <label>Dòng tiêu đề<input type="number" min="1" max="${f.rawRows.length}" value="${f.headerRow}" data-action="numHeader" data-which="${tag}"></label>
+      <label>Dòng bắt đầu dữ liệu<input type="number" min="1" max="${f.rawRows.length}" value="${f.dataStartRow}" data-action="numDataStart" data-which="${tag}"></label>
+    </div>
+    <div class="preview"><table>${rows}</table></div>`;
+}
+
+function tplStep3(){
+  const columnsA = getColumns(state.fileA);
+  const columnsB = getColumns(state.fileB);
+  const rows = state.keySlots.map((slot,idx)=>`
+    <div class="keyrow">
+      <span class="klabel">Khóa ${idx+1}</span>
+      <select data-action="keySelect" data-idx="${idx}" data-side="aCol">
+        <option value="">— Cột File A —</option>
+        ${columnsA.map(c=>`<option value="${c.index}" ${String(c.index)===String(slot.aCol)?'selected':''}>${esc(c.name)}</option>`).join('')}
+      </select>
+      <span style="color:#96A79C;">↔</span>
+      <select data-action="keySelect" data-idx="${idx}" data-side="bCol">
+        <option value="">— Cột File B —</option>
+        ${columnsB.map(c=>`<option value="${c.index}" ${String(c.index)===String(slot.bCol)?'selected':''}>${esc(c.name)}</option>`).join('')}
+      </select>
+      <button class="removekey" data-action="removeKey" data-idx="${idx}" ${state.keySlots.length===1?'disabled':''}>×</button>
+    </div>`).join('');
+  const canNext = state.keySlots.every(s=>s.aCol!=='' && s.bCol!=='');
+  return `
+    <div class="panel">
+      <p class="help">Chọn cột làm khóa liên kết giữa File A và File B. Có thể dùng 1, 2 hoặc 3 cột kết hợp (ví dụ: Số tờ + Số thửa).</p>
+      ${rows}
+      <button class="addkey" data-action="addKey" ${state.keySlots.length>=3?'disabled':''}>+ Thêm cột khóa (tối đa 3)</button>
+    </div>
+    <div class="actions">
+      <button class="nav ghost" data-action="goto" data-step="2">← Quay lại</button>
+      <button class="nav" data-action="goto" data-step="4" ${canNext?'':'disabled'}>Tiếp theo →</button>
+    </div>`;
+}
+
+function tplStep4(){
+  const columnsA = getColumns(state.fileA);
+  const columnsB = getColumns(state.fileB);
+  const useBB = state.useBackbone === 'yes';
+  const canRun = useBB ? true : (state.selectedOutA.length + state.selectedOutB.length) > 0;
+
+  const backboneToggle = `
+    <div class="panel">
+      <p style="font-weight:600;margin:0 0 6px;">Chọn file nền (backbone)?</p>
+      <p class="help">Có: giữ toàn bộ dòng của 1 file làm nền, tự động lấy tất cả cột của cả 2 file, bỏ qua bước chọn cột.<br>Không: chỉ chọn cột tùy ý từ File A và File B, chỉ xuất các dòng tìm thấy liên kết.</p>
+      <div style="display:flex;gap:10px;">
+        <button class="choice ${useBB?'selDark':''}" data-action="setUseBackbone" data-value="yes">Có — dùng file nền</button>
+        <button class="choice ${!useBB?'selDark':''}" data-action="setUseBackbone" data-value="no">Không — chỉ chọn cột nối</button>
+      </div>
+    </div>`;
+
+  if(useBB){
+    return `
+      ${backboneToggle}
+      <div class="panel">
+        <p style="font-weight:600;margin:0 0 6px;">Chọn file nền</p>
+        <p class="help">Kết quả sẽ giữ toàn bộ dòng của file nền, tự động kèm tất cả cột của cả 2 file; cột từ file còn lại sẽ được nối thêm khi tìm thấy liên kết.</p>
+        <div style="display:flex;gap:10px;">
+          <button class="choice ${state.baseFile==='A'?'selA':''}" data-action="setBase" data-value="A">File A (${esc(state.fileA.name)})</button>
+          <button class="choice ${state.baseFile==='B'?'selB':''}" data-action="setBase" data-value="B">File B (${esc(state.fileB.name)})</button>
+        </div>
+      </div>
+      <div class="panel">
+        <p style="font-weight:600;margin:0 0 6px;">Dòng trùng khóa trong file nền</p>
+        <p class="help">Áp dụng khi nhiều dòng trong file nền có cùng giá trị khóa liên kết.</p>
+        <div style="display:flex;gap:10px;">
+          <button class="choice ${state.dedupeBase==='keep'?'selDark':''}" data-action="setDedupe" data-value="keep">Không xóa dòng trùng (giữ tất cả)</button>
+          <button class="choice ${state.dedupeBase==='remove'?'selDark':''}" data-action="setDedupe" data-value="remove">Xóa dòng trùng (chỉ giữ dòng đầu tiên theo khóa)</button>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="nav ghost" data-action="goto" data-step="3">← Quay lại</button>
+        <button class="nav" data-action="run" ${canRun?'':'disabled'}>Chạy đối soát →</button>
+      </div>`;
+  }
+
+  return `
+    ${backboneToggle}
+    <div class="panel">
+      <p style="font-weight:600;margin:0 0 6px;">Dòng trùng khóa trong File A (dòng đối chiếu)</p>
+      <p class="help">Áp dụng khi nhiều dòng trong File A có cùng giá trị khóa liên kết.</p>
+      <div style="display:flex;gap:10px;">
+        <button class="choice ${state.dedupeBase==='keep'?'selDark':''}" data-action="setDedupe" data-value="keep">Không xóa dòng trùng (giữ tất cả)</button>
+        <button class="choice ${state.dedupeBase==='remove'?'selDark':''}" data-action="setDedupe" data-value="remove">Xóa dòng trùng (chỉ giữ dòng đầu tiên theo khóa)</button>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col panel">
+        <span class="tag a">Cột giữ lại — File A</span>
+        <div class="outcols">${columnsA.map(c=>`<label><input type="checkbox" data-action="toggleOut" data-which="A" data-idx="${c.index}" ${state.selectedOutA.includes(c.index)?'checked':''}>${esc(c.name)}</label>`).join('')}</div>
+      </div>
+      <div class="col panel">
+        <span class="tag b">Cột giữ lại — File B</span>
+        <div class="outcols">${columnsB.map(c=>`<label><input type="checkbox" data-action="toggleOut" data-which="B" data-idx="${c.index}" ${state.selectedOutB.includes(c.index)?'checked':''}>${esc(c.name)}</label>`).join('')}</div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="nav ghost" data-action="goto" data-step="3">← Quay lại</button>
+      <button class="nav" data-action="run" ${canRun?'':'disabled'}>Chạy đối soát (chỉ dòng khớp) →</button>
+    </div>`;
+}
+
+function tplStep5(){
+  const r = state.result;
+  if(!r) return `<p class="help">Chưa có kết quả. Vui lòng chạy đối soát ở bước trước.</p>`;
+  const headerKeys = r.rows[0] ? Object.keys(r.rows[0]) : [];
+  const bodyRows = r.rows.slice(0,50).map(row=>{
+    const cells = headerKeys.map(k=>{
+      const v = row[k];
+      if(k==='Trạng thái liên kết'){
+        const ok = v==='Tìm thấy liên kết';
+        return `<td><span class="badge ${ok?'ok':'bad'}">${esc(v)}</span></td>`;
+      }
+      return `<td>${esc(v)}</td>`;
+    }).join('');
+    return `<tr>${cells}</tr>`;
+  }).join('');
+  return `
+    <div class="stats">
+      <div class="statbox"><div class="n">${r.consideredCount}</div><div class="l">${r.mode==='yes' ? `Dòng nền sau xử lý (File ${r.baseTag})` : 'Dòng đối chiếu sau xử lý (File A)'}</div></div>
+      <div class="statbox"><div class="n">${r.duplicateCount||0}</div><div class="l">Dòng trùng khóa đã loại bỏ</div></div>
+      <div class="statbox ok"><div class="n">${r.matchedCount}</div><div class="l">Tìm thấy liên kết</div></div>
+      <div class="statbox bad"><div class="n">${r.consideredCount - r.matchedCount}</div><div class="l">Không có liên kết</div></div>
+    </div>
+    ${r.mode==='no' ? `<p class="help">Chế độ không dùng file nền: file kết quả chỉ gồm các dòng tìm thấy liên kết (${r.matchedCount} dòng).</p>` : ''}
+    <div class="panel" style="padding:0;">
+      <div class="resulthead">
+        <strong style="font-size:13.5px;">Xem trước kết quả (tối đa 50 dòng)</strong>
+        <button class="exportbtn" data-action="export">⬇ Xuất file Excel kết quả</button>
+      </div>
+      <div class="resulttable">
+        <table>
+          <thead><tr>${headerKeys.map(k=>`<th>${esc(k)}</th>`).join('')}</tr></thead>
+          <tbody>${bodyRows}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="actions" style="justify-content:flex-start;">
+      <button class="nav ghost" data-action="goto" data-step="4">← Quay lại chỉnh cấu hình</button>
+    </div>`;
+}
+
+// ---------- merge logic ----------
+function runMerge(){
+  state.error = '';
+
+  if(state.useBackbone === 'yes'){
+    const base = state.baseFile==='A' ? state.fileA : state.fileB;
+    const other = state.baseFile==='A' ? state.fileB : state.fileA;
+    const baseCols = state.baseFile==='A' ? getColumns(state.fileA) : getColumns(state.fileB);
+    const otherCols = state.baseFile==='A' ? getColumns(state.fileB) : getColumns(state.fileA);
+    const baseSelected = baseCols.map(c=>c.index);
+    const otherSelected = otherCols.map(c=>c.index);
+    const baseKeyIdx = state.keySlots.map(s=> state.baseFile==='A' ? s.aCol : s.bCol);
+    const otherKeyIdx = state.keySlots.map(s=> state.baseFile==='A' ? s.bCol : s.aCol);
+
+    const otherRows = other.rawRows.slice(other.dataStartRow-1);
+    const otherMap = new Map();
+    otherRows.forEach(row=>{
+      if(!row || row.every(c=>c===''||c===null||c===undefined)) return;
+      const key = otherKeyIdx.map(idx=>normalize(row[Number(idx)])).join('||');
+      if(!otherMap.has(key)) otherMap.set(key,row);
+    });
+
+    let baseRows = base.rawRows.slice(base.dataStartRow-1);
+    baseRows = baseRows.filter(row=> row && !row.every(c=>c===''||c===null||c===undefined));
+
+    let duplicateCount = 0;
+    if(state.dedupeBase==='remove'){
+      const seen = new Set();
+      const deduped = [];
+      baseRows.forEach(row=>{
+        const key = baseKeyIdx.map(idx=>normalize(row[Number(idx)])).join('||');
+        if(seen.has(key)){ duplicateCount++; } else { seen.add(key); deduped.push(row); }
+      });
+      baseRows = deduped;
+    }
+
+    let matchedCount = 0;
+    const rows = [];
+    baseRows.forEach(row=>{
+      const key = baseKeyIdx.map(idx=>normalize(row[Number(idx)])).join('||');
+      const matchRow = otherMap.get(key);
+      if(matchRow) matchedCount++;
+      const obj = {};
+      baseSelected.forEach(idx=>{ obj[colLabel(state.baseFile, baseCols, idx)] = row[idx] ?? ''; });
+      otherSelected.forEach(idx=>{ obj[colLabel(state.baseFile==='A'?'B':'A', otherCols, idx)] = matchRow ? (matchRow[idx] ?? '') : ''; });
+      obj['Trạng thái liên kết'] = matchRow ? 'Tìm thấy liên kết' : 'Không có liên kết';
+      rows.push(obj);
+    });
+
+    state.result = {mode:'yes', matchedCount, consideredCount: baseRows.length, duplicateCount, rows, baseTag: state.baseFile};
+  } else {
+    const driver = state.fileA;
+    const target = state.fileB;
+    const driverCols = getColumns(state.fileA);
+    const targetCols = getColumns(state.fileB);
+    const driverKeyIdx = state.keySlots.map(s=>s.aCol);
+    const targetKeyIdx = state.keySlots.map(s=>s.bCol);
+
+    const targetRows = target.rawRows.slice(target.dataStartRow-1);
+    const targetMap = new Map();
+    targetRows.forEach(row=>{
+      if(!row || row.every(c=>c===''||c===null||c===undefined)) return;
+      const key = targetKeyIdx.map(idx=>normalize(row[Number(idx)])).join('||');
+      if(!targetMap.has(key)) targetMap.set(key,row);
+    });
+
+    let driverRows = driver.rawRows.slice(driver.dataStartRow-1);
+    driverRows = driverRows.filter(row=> row && !row.every(c=>c===''||c===null||c===undefined));
+
+    let duplicateCount = 0;
+    if(state.dedupeBase==='remove'){
+      const seen = new Set();
+      const deduped = [];
+      driverRows.forEach(row=>{
+        const key = driverKeyIdx.map(idx=>normalize(row[Number(idx)])).join('||');
+        if(seen.has(key)){ duplicateCount++; } else { seen.add(key); deduped.push(row); }
+      });
+      driverRows = deduped;
+    }
+
+    let matchedCount = 0;
+    const rows = [];
+    driverRows.forEach(row=>{
+      const key = driverKeyIdx.map(idx=>normalize(row[Number(idx)])).join('||');
+      const matchRow = targetMap.get(key);
+      if(!matchRow) return;
+      matchedCount++;
+      const obj = {};
+      state.selectedOutA.forEach(idx=>{ obj[colLabel('A', driverCols, idx)] = row[idx] ?? ''; });
+      state.selectedOutB.forEach(idx=>{ obj[colLabel('B', targetCols, idx)] = matchRow[idx] ?? ''; });
+      obj['Trạng thái liên kết'] = 'Tìm thấy liên kết';
+      rows.push(obj);
+    });
+
+    state.result = {mode:'no', matchedCount, consideredCount: driverRows.length, duplicateCount, rows, baseTag: 'A'};
+  }
+
+  state.step = 5;
+  render();
+}
+
+function exportResult(){
+  const r = state.result;
+  if(!r || r.rows.length===0) return;
+  const ws = XLSX.utils.json_to_sheet(r.rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'KetQuaDoiSoat');
+  const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+  const blob = new Blob([wbout], {type:'application/octet-stream'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'ket-qua-so-sanh.xlsx'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ---------- event delegation ----------
+document.addEventListener('click', e=>{
+  const t = e.target.closest('[data-action]');
+  if(!t) return;
+  const action = t.dataset.action;
+  if(action==='goto'){
+    const n = Number(t.dataset.step);
+    if(n<=state.step || n===state.step+0){ /* allow forward only via explicit nav buttons which already gate via disabled */ }
+    state.step = n; render();
+  } else if(action==='setHeader'){
+    const f = t.dataset.which==='A'?state.fileA:state.fileB;
+    f.headerRow = Number(t.dataset.row); render();
+  } else if(action==='setDataStart'){
+    const f = t.dataset.which==='A'?state.fileA:state.fileB;
+    f.dataStartRow = Number(t.dataset.row); render();
+  } else if(action==='removeKey'){
+    const idx = Number(t.dataset.idx);
+    if(state.keySlots.length>1) state.keySlots.splice(idx,1);
+    render();
+  } else if(action==='addKey'){
+    if(state.keySlots.length<3) state.keySlots.push({aCol:'',bCol:''});
+    render();
+  } else if(action==='setBase'){
+    state.baseFile = t.dataset.value; render();
+  } else if(action==='setUseBackbone'){
+    state.useBackbone = t.dataset.value; render();
+  } else if(action==='setDedupe'){
+    state.dedupeBase = t.dataset.value; render();
+  } else if(action==='run'){
+    runMerge();
+  } else if(action==='export'){
+    exportResult();
+  }
+});
+
+document.addEventListener('change', async e=>{
+  const t = e.target.closest('[data-action]');
+  if(!t) return;
+  const action = t.dataset.action;
+  if(action==='upload'){
+    const file = t.files[0];
+    if(!file) return;
+    try{
+      const aoa = await readExcelFile(file);
+      const which = t.dataset.which;
+      const upd = {tag:which, name:file.name, rawRows:aoa, headerRow:1, dataStartRow: aoa.length>1?2:1};
+      if(which==='A') state.fileA = upd; else state.fileB = upd;
+      state.keySlots = [{aCol:'',bCol:''}];
+      state.useBackbone = 'yes'; state.baseFile = 'A'; state.dedupeBase = 'keep';
+      state.selectedOutA = []; state.selectedOutB = [];
+      state.result = null; state.error = '';
+    }catch(err){
+      setError('Không đọc được file '+t.dataset.which+': '+err.message);
+    }
+    render();
+  } else if(action==='numHeader'){
+    const f = t.dataset.which==='A'?state.fileA:state.fileB;
+    f.headerRow = Number(t.value)||1; render();
+  } else if(action==='numDataStart'){
+    const f = t.dataset.which==='A'?state.fileA:state.fileB;
+    f.dataStartRow = Number(t.value)||1; render();
+  } else if(action==='keySelect'){
+    const idx = Number(t.dataset.idx);
+    state.keySlots[idx][t.dataset.side] = t.value; render();
+  } else if(action==='toggleOut'){
+    const idx = Number(t.dataset.idx);
+    const arr = t.dataset.which==='A' ? state.selectedOutA : state.selectedOutB;
+    const pos = arr.indexOf(idx);
+    if(pos>-1) arr.splice(pos,1); else arr.push(idx);
+  }
+});
+
+render();
+</script>
+</body>
+</html>
