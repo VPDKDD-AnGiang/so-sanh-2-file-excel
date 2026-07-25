@@ -1,0 +1,1548 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bộ công cụ xử lý phân loại dữ liệu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+  // Tải thư viện ExcelJS với 3 nguồn CDN dự phòng (tự chuyển nguồn nếu nguồn đầu bị chặn/lỗi mạng)
+  (function loadExcelJS(sources, i){
+    if (i >= sources.length){ window.__EXCELJS_FAILED__ = true; return; }
+    var s = document.createElement('script');
+    s.src = sources[i];
+    s.onerror = function(){ loadExcelJS(sources, i + 1); };
+    document.head.appendChild(s);
+  })([
+    'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js',
+    'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js',
+    'https://unpkg.com/exceljs@4.4.0/dist/exceljs.min.js'
+  ], 0);
+</script>
+<style>
+  :root{
+    --bg:#F6F2E7;
+    --panel:#FFFFFF;
+    --border:#DED5BE;
+    --navy:#17324C;
+    --navy-dark:#0E2033;
+    --gold:#B4842A;
+    --gold-soft:#E8D9B8;
+    --blue-light:#6FA8D8;
+    --text:#2A2F36;
+    --muted:#6B7280;
+    --green:#2E7D5C;
+    --green-bg:#E7F2EC;
+    --red:#AE4234;
+    --red-bg:#F7E9E6;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'IBM Plex Sans', sans-serif;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:880px; margin:0 auto; padding:0 24px 80px;}
+
+  /* Topbar */
+  .topbar{
+    display:flex; align-items:center; gap:10px;
+    padding:22px 24px 0;
+    max-width:880px; margin:0 auto;
+  }
+  .badge{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px; letter-spacing:.08em;
+    color:var(--navy);
+    background:var(--gold-soft);
+    border:1px solid var(--gold);
+    padding:4px 9px;
+    border-radius:3px;
+    text-transform:uppercase;
+  }
+  .topbar .divider{color:var(--muted); font-size:12px;}
+  .topbar .sub{font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--muted);}
+
+  /* Hero */
+  .hero{padding:28px 0 20px;}
+  h1{
+    font-family:'Spectral', serif;
+    font-weight:700;
+    font-size:clamp(20px, 2.6vw, 26px);
+    line-height:1.25;
+    color:var(--blue-light);
+    text-align:center;
+    letter-spacing:.02em;
+    margin:0 auto 10px;
+    max-width:640px;
+  }
+  .hero p.lead{
+    font-size:15px;
+    color:var(--muted);
+    max-width:580px;
+    margin:0 0 22px;
+  }
+  .diagram{width:100%; max-width:640px; display:block; margin:0 auto;}
+  .diagram .doc-fill{fill:var(--panel);}
+  .diagram .doc-stroke{stroke:var(--navy); stroke-width:1.6;}
+  .diagram .doc-stroke-out{stroke:var(--gold); stroke-width:2.2;}
+  .diagram .doc-line{stroke:var(--border); stroke-width:2;}
+  .diagram text{
+    font-family:'IBM Plex Mono', monospace;
+    fill:var(--navy);
+    font-size:12px;
+  }
+  .diagram text.out{fill:var(--navy-dark); font-weight:600;}
+  .diagram path.thread{
+    fill:none; stroke:var(--gold); stroke-width:1.6;
+    stroke-dasharray:5 5;
+    animation:dash 3.2s linear infinite;
+    opacity:.85;
+  }
+  @keyframes dash{to{stroke-dashoffset:-60;}}
+  .diagram circle.dot{fill:var(--gold);}
+
+  /* Tab nav */
+  .tabnav{
+    display:flex; gap:4px;
+    border-bottom:1px solid var(--border);
+    margin-bottom:28px;
+  }
+  .tab-btn{
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size:14px;
+    font-weight:600;
+    color:var(--muted);
+    background:none;
+    border:none;
+    padding:10px 8px 13px;
+    margin-bottom:-1px;
+    cursor:pointer;
+    border-bottom:2.5px solid transparent;
+    transition:color .15s, border-color .15s;
+  }
+  .tab-btn .n{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:18px; height:18px; border-radius:50%;
+    background:var(--border); color:var(--navy-dark);
+    font-family:'IBM Plex Mono', monospace; font-size:10.5px;
+    margin-right:7px;
+  }
+  .tab-btn.active{color:var(--navy-dark); border-bottom-color:var(--gold);}
+  .tab-btn.active .n{background:var(--gold); color:#fff;}
+  .tab-btn:hover:not(.active){color:var(--navy);}
+
+  .tool-panel{display:none;}
+  .tool-panel.active{display:block;}
+
+  /* Panels */
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:6px;
+    padding:26px 28px;
+    margin-bottom:22px;
+  }
+  .panel h2{
+    font-family:'Spectral', serif;
+    font-size:19px;
+    font-weight:600;
+    color:var(--navy-dark);
+    margin:0 0 6px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .panel h2 .step-no{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    color:var(--gold);
+    border:1px solid var(--gold);
+    width:22px; height:22px;
+    border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+  }
+  .panel .desc{color:var(--muted); font-size:13.5px; margin:0 0 18px;}
+
+  /* Grid */
+  .grid-2{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  @media(max-width:560px){.grid-2{grid-template-columns:1fr;}}
+
+  /* Upload zone */
+  .up-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px; color:var(--gold); letter-spacing:.03em;
+    text-transform:uppercase; margin-bottom:8px;
+  }
+  .dropzone{
+    border:1.5px dashed var(--border);
+    border-radius:6px;
+    padding:34px 20px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s, background .15s;
+    background:#FCFAF4;
+  }
+  .dropzone.sm{padding:22px 14px;}
+  .dropzone:hover, .dropzone.drag{
+    border-color:var(--gold);
+    background:var(--gold-soft);
+  }
+  .dropzone input{display:none;}
+  .dropzone .icon{font-size:24px; margin-bottom:6px; color:var(--navy);}
+  .dropzone .main{font-size:13.5px; font-weight:500; color:var(--navy-dark);}
+  .dropzone .hint{font-size:12px; color:var(--muted); margin-top:4px;}
+  .file-chip{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:12px;
+    margin-top:12px;
+    padding:10px 13px;
+    background:#FCFAF4;
+    border:1px solid var(--border);
+    border-radius:5px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px;
+    display:none;
+  }
+  .file-chip.show{display:flex;}
+  .file-chip .name{color:var(--navy-dark); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .file-chip .remove{color:var(--red); cursor:pointer; background:none; border:none; font-family:inherit; font-size:12.5px; flex-shrink:0;}
+
+  /* key config (editable) */
+  .keymap{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  .keymap.keymap3{grid-template-columns:repeat(3,1fr);}
+  @media(max-width:760px){.keymap.keymap3{grid-template-columns:1fr 1fr;}}
+  @media(max-width:560px){.keymap{grid-template-columns:1fr;} .keymap.keymap3{grid-template-columns:1fr;}}
+  .keymap .card{
+    border:1px solid var(--border);
+    border-radius:5px;
+    padding:16px 16px 6px;
+    background:#FCFAF4;
+  }
+  .keymap .card .sheet-name{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    color:var(--gold);
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    margin-bottom:12px;
+  }
+  .keymap .field{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:10px; margin-bottom:12px;
+  }
+  .keymap .field label{font-size:12.5px; color:var(--muted); flex:1;}
+  .keymap .field input{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13.5px;
+    font-weight:500;
+    color:var(--navy-dark);
+    background:#fff;
+    border:1px solid var(--border);
+    border-radius:4px;
+    padding:6px 8px;
+    text-align:center;
+  }
+  .keymap .field input.col-input{width:56px;}
+  .keymap .field input.row-input{width:64px;}
+  .keymap .field input:focus{outline:none; border-color:var(--gold); box-shadow:0 0 0 2px var(--gold-soft);}
+  .keymap .field input.invalid{border-color:var(--red); box-shadow:0 0 0 2px var(--red-bg);}
+
+  .keyform-actions{display:flex; justify-content:flex-end; margin-top:2px; margin-bottom:6px;}
+  .btn-reset{
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size:12.5px;
+    color:var(--muted);
+    background:none; border:none; cursor:pointer;
+    padding:4px 2px; text-decoration:underline;
+  }
+  .btn-reset:hover{color:var(--navy-dark);}
+
+  .append-note{
+    margin-top:14px; padding:12px 14px;
+    background:#FCFAF4; border:1px solid var(--border); border-radius:5px;
+    font-size:13px; color:var(--text);
+  }
+  .append-note b{color:var(--navy-dark);}
+  .report-note{
+    margin-top:10px; padding:12px 14px;
+    background:var(--gold-soft); border:1px solid var(--gold); border-radius:5px;
+    font-size:13px; color:var(--text);
+  }
+  .report-note b{color:var(--navy-dark);}
+
+  /* filter box (Tool 2) */
+  .filter-box{
+    margin-top:16px; padding:14px 16px;
+    border:1px solid var(--border); border-radius:5px; background:#FCFAF4;
+  }
+  .filter-head{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+  .filter-chips{display:flex; flex-wrap:wrap; gap:8px;}
+  .filter-empty{font-size:12.5px; color:var(--muted); font-style:italic;}
+  .chip-check{
+    display:inline-flex; align-items:center; gap:6px;
+    font-family:'IBM Plex Mono', monospace; font-size:12.5px;
+    padding:6px 11px; border-radius:20px;
+    border:1px solid var(--border); background:#fff; color:var(--navy-dark);
+    cursor:pointer; user-select:none;
+  }
+  .chip-check input{accent-color:var(--gold); cursor:pointer;}
+  .chip-check.checked{border-color:var(--gold); background:var(--gold-soft);}
+  .chip-check .cnt{color:var(--muted);}
+
+  /* breakdown list (Tool 2 result) */
+  .breakdown{margin-bottom:16px;}
+  .breakdown-row{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:8px 12px; border:1px solid var(--border); border-radius:4px;
+    background:#FCFAF4; font-size:13px; margin-bottom:6px;
+  }
+  .breakdown-row .k{color:var(--text);}
+  .breakdown-row .v{font-family:'IBM Plex Mono', monospace; font-weight:600; color:var(--navy-dark);}
+  .breakdown-row.tag-keep{border-left:3px solid var(--green);}
+  .breakdown-row.tag-change{border-left:3px solid var(--gold);}
+  .breakdown-row.tag-new{border-left:3px solid var(--red);}
+  .breakdown-row.tag-excluded{border-left:3px solid var(--muted);}
+
+  /* buttons */
+  .btn{
+    font-family:'IBM Plex Sans', sans-serif;
+    font-weight:600;
+    font-size:14.5px;
+    padding:12px 22px;
+    border-radius:5px;
+    border:none;
+    cursor:pointer;
+    display:inline-flex; align-items:center; gap:8px;
+    transition:transform .1s, box-shadow .15s, background .15s;
+  }
+  .btn-primary{background:var(--navy); color:#fff;}
+  .btn-primary:hover:not(:disabled){background:var(--navy-dark);}
+  .btn-primary:disabled{background:#B7C0C9; cursor:not-allowed;}
+  .btn-primary:active:not(:disabled){transform:scale(.98);}
+  .btn-gold{background:var(--gold); color:#fff;}
+  .btn-gold:hover{filter:brightness(1.05);}
+  .btn-gold:active{transform:scale(.98);}
+
+  .spinner{
+    width:14px; height:14px;
+    border:2px solid rgba(255,255,255,.4);
+    border-top-color:#fff;
+    border-radius:50%;
+    animation:spin .7s linear infinite;
+    display:none;
+  }
+  .spinner.show{display:inline-block;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* log */
+  .log{
+    margin-top:18px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px;
+    background:#FCFAF4;
+    border:1px solid var(--border);
+    border-radius:5px;
+    padding:14px 16px;
+    max-height:220px;
+    overflow-y:auto;
+    display:none;
+  }
+  .log.show{display:block;}
+  .log .line{padding:2px 0; display:flex; gap:8px;}
+  .log .line .t{color:var(--muted); flex-shrink:0;}
+  .log .line.ok .m{color:var(--green);}
+  .log .line.err .m{color:var(--red);}
+  .log .line.info .m{color:var(--text);}
+
+  /* result */
+  .result{display:none;}
+  .result.show{display:block;}
+  .stat-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px;}
+  .stat-grid.four{grid-template-columns:repeat(4,1fr);}
+  @media(max-width:640px){.stat-grid, .stat-grid.four{grid-template-columns:repeat(2,1fr);}}
+  .stat{border:1px solid var(--border); border-radius:5px; padding:14px 14px; background:#FCFAF4;}
+  .stat .num{font-family:'IBM Plex Mono', monospace; font-size:22px; font-weight:500; color:var(--navy-dark);}
+  .stat .lbl{font-size:11.5px; color:var(--muted); margin-top:2px;}
+  .stat.warn .num{color:var(--gold);}
+  .stat.good .num{color:var(--green);}
+  .stat.bad .num{color:var(--red);}
+
+  .download-row{
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    padding-top:16px; border-top:1px solid var(--border);
+  }
+  .download-row .fname{font-family:'IBM Plex Mono', monospace; font-size:13px; color:var(--muted);}
+
+  .footer-note{text-align:center; font-size:12.5px; color:var(--muted); margin-top:8px; padding-top:8px;}
+  .footer-note .lock{color:var(--green);}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="badge">KH2959</span>
+  <span class="divider">·</span>
+  <span class="sub">Bộ công cụ nội bộ — xử lý cục bộ trên trình duyệt</span>
+</div>
+
+<div class="wrap">
+
+  <div class="hero">
+    <h1>BỘ CÔNG CỤ XỬ LÝ PHÂN LOẠI DỮ LIỆU</h1>
+    <p class="lead">Chọn công cụ bên dưới: nối dữ liệu hai bảng trong cùng một file, hoặc so sánh kết quả phân loại giữa bộ tiêu chí cũ và bộ tiêu chí mới.</p>
+
+    <svg class="diagram" viewBox="0 0 640 240" xmlns="http://www.w3.org/2000/svg">
+      <rect class="doc-fill doc-stroke" x="30" y="24" width="130" height="76" rx="4"/>
+      <text x="45" y="48" class="lbl">TongHop</text>
+      <line class="doc-line" x1="45" y1="60" x2="140" y2="60"/>
+      <line class="doc-line" x1="45" y1="70" x2="140" y2="70"/>
+      <line class="doc-line" x1="45" y1="80" x2="110" y2="80"/>
+
+      <rect class="doc-fill doc-stroke" x="30" y="140" width="130" height="76" rx="4"/>
+      <text x="45" y="164" class="lbl">ThuocTinh</text>
+      <line class="doc-line" x1="45" y1="176" x2="140" y2="176"/>
+      <line class="doc-line" x1="45" y1="186" x2="140" y2="186"/>
+      <line class="doc-line" x1="45" y1="196" x2="110" y2="196"/>
+
+      <rect class="doc-fill doc-stroke-out" x="470" y="82" width="150" height="86" rx="4"/>
+      <text x="486" y="108" class="out">Kết quả</text>
+      <line class="doc-line" x1="486" y1="122" x2="605" y2="122"/>
+      <line class="doc-line" x1="486" y1="133" x2="605" y2="133"/>
+      <line class="doc-line" x1="486" y1="144" x2="605" y2="144"/>
+      <line class="doc-line" x1="486" y1="155" x2="560" y2="155"/>
+
+      <path id="thread1" class="thread" d="M160,62 C 300,62 340,110 470,116"/>
+      <path id="thread2" class="thread" d="M160,178 C 300,178 340,140 470,140"/>
+
+      <circle class="dot" r="3.2">
+        <animateMotion dur="3.2s" repeatCount="indefinite" rotate="auto"><mpath href="#thread1"/></animateMotion>
+      </circle>
+      <circle class="dot" r="3.2">
+        <animateMotion dur="3.2s" begin="1.1s" repeatCount="indefinite" rotate="auto"><mpath href="#thread2"/></animateMotion>
+      </circle>
+    </svg>
+  </div>
+
+  <div class="tabnav">
+    <button class="tab-btn active" data-tab="tool1"><span class="n">1</span>Nối 2 bảng dữ liệu</button>
+    <button class="tab-btn" data-tab="tool2"><span class="n">2</span>So sánh phân loại cũ – mới</button>
+  </div>
+
+  <!-- ==================== TOOL 1 ==================== -->
+  <div class="tool-panel active" id="tool1Panel">
+
+    <div class="panel">
+      <h2><span class="step-no">1</span>Tải file Excel đầu vào</h2>
+      <p class="desc">Chấp nhận file .xlsx có sheet TongHop và ThuocTinh.</p>
+      <div class="dropzone" id="dropzone">
+        <input type="file" id="fileInput" accept=".xlsx,.xls">
+        <div class="icon">⬆</div>
+        <div class="main">Kéo thả file vào đây, hoặc bấm để chọn file</div>
+        <div class="hint">.xlsx — có sheet TongHop và ThuocTinh</div>
+      </div>
+      <div class="file-chip" id="fileChip">
+        <span class="name" id="fileName"></span>
+        <button class="remove" id="fileRemove">Gỡ bỏ</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2><span class="step-no">2</span>Quy tắc đối chiếu khóa liên kết</h2>
+      <p class="desc">Có thể điều chỉnh cột khóa và dòng bắt đầu dữ liệu cho từng sheet. Giá trị mặc định theo cấu hình chuẩn KH2959.</p>
+      <div class="keymap">
+        <div class="card">
+          <div class="sheet-name">Sheet TongHop</div>
+          <div class="field"><label>Cột khóa 1 (Số hiệu tờ bản đồ)</label><input type="text" class="col-input" id="t1TgKey1" value="C" maxlength="3"></div>
+          <div class="field"><label>Cột khóa 2 (Số thứ tự thửa đất)</label><input type="text" class="col-input" id="t1TgKey2" value="D" maxlength="3"></div>
+          <div class="field"><label>Dòng bắt đầu dữ liệu</label><input type="number" class="row-input" id="t1TgStart" value="10" min="1"></div>
+        </div>
+        <div class="card">
+          <div class="sheet-name">Sheet ThuocTinh</div>
+          <div class="field"><label>Cột khóa 1 (Số hiệu tờ bản đồ)</label><input type="text" class="col-input" id="t1ThKey1" value="Q" maxlength="3"></div>
+          <div class="field"><label>Cột khóa 2 (Số thứ tự thửa đất)</label><input type="text" class="col-input" id="t1ThKey2" value="R" maxlength="3"></div>
+          <div class="field"><label>Dòng bắt đầu dữ liệu</label><input type="number" class="row-input" id="t1ThStart" value="7" min="1"></div>
+        </div>
+      </div>
+      <div class="keyform-actions"><button class="btn-reset" id="t1ResetKeys" type="button">↺ Khôi phục mặc định</button></div>
+      <div class="append-note">
+        Sheet mới <b>tonghop_xa</b> lấy nền dữ liệu từ <b>ThuocTinh</b>, gắn thêm 10 cột từ <b>AC</b>: cột <b>O</b> (Phân loại dữ liệu theo VB 515/KH-BCA-BNNMT), cột <b>V</b> (Chủ sử dụng/sở hữu), cột <b>W</b> (Thửa đất), cột <b>X→AD</b> (Tài sản gắn liền với đất, Giấy chứng nhận, Giao dịch/biến động, Hồ sơ quét/ký số, Tham chiếu ĐVHC, Số khối còn thiếu, Số trường còn thiếu) — lấy từ TongHop theo khóa liên kết tương ứng. Tiêu đề các cột mới hiển thị màu xanh dương.
+      </div>
+      <div class="report-note">
+        Công cụ tự chèn thêm <b>bảng báo cáo tóm tắt</b> ở dòng 1, bắt đầu từ cột AC: đếm số trường hợp theo từng Nhóm phân loại, và số trường hợp cần bổ sung thông tin ở từng khối dữ liệu (Chủ sử dụng/sở hữu, Thửa đất, Tài sản gắn liền với đất, Giấy chứng nhận, Giao dịch/biến động, Hồ sơ quét/ký số, Tham chiếu ĐVHC, Số khối/trường còn thiếu).
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2><span class="step-no">3</span>Xử lý &amp; xuất file</h2>
+      <p class="desc">Sheet TongHop và ThuocTinh được giữ nguyên. Sheet tonghop_xa sẽ được tạo và nạp dữ liệu tự động.</p>
+      <button class="btn btn-primary" id="processBtn" disabled>
+        <span class="spinner" id="spinner"></span>
+        <span id="processLabel">Xử lý &amp; Xuất file</span>
+      </button>
+      <div class="log" id="log"></div>
+    </div>
+
+    <div class="panel result" id="resultPanel">
+      <h2><span class="step-no">✓</span>Hoàn tất</h2>
+      <div class="stat-grid">
+        <div class="stat"><div class="num" id="statTotal">—</div><div class="lbl">Dòng ThuocTinh đã xử lý</div></div>
+        <div class="stat good"><div class="num" id="statMatched">—</div><div class="lbl">Dòng khớp được với TongHop</div></div>
+        <div class="stat warn"><div class="num" id="statUnmatched">—</div><div class="lbl">Dòng không tìm thấy khớp</div></div>
+      </div>
+      <div class="download-row">
+        <button class="btn btn-gold" id="downloadBtn">⬇ Tải file kết quả</button>
+        <span class="fname" id="outFileName"></span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ==================== TOOL 2 ==================== -->
+  <div class="tool-panel" id="tool2Panel">
+
+    <div class="panel">
+      <h2><span class="step-no">1</span>Tải 2 file Excel đầu vào</h2>
+      <p class="desc">File tiêu chí cũ (kết quả phân loại cũ) và file tiêu chí mới — cả hai đọc từ sheet TongHop.</p>
+      <div class="grid-2">
+        <div>
+          <div class="up-label">Tiêu chí cũ</div>
+          <div class="dropzone sm" id="dropzoneOld">
+            <input type="file" id="fileInputOld" accept=".xlsx,.xls">
+            <div class="icon">⬆</div>
+            <div class="main">Chọn file TieuChicu.xlsx</div>
+            <div class="hint">Có sheet TongHop</div>
+          </div>
+          <div class="file-chip" id="fileChipOld">
+            <span class="name" id="fileNameOld"></span>
+            <button class="remove" id="fileRemoveOld">Gỡ bỏ</button>
+          </div>
+        </div>
+        <div>
+          <div class="up-label">Tiêu chí mới</div>
+          <div class="dropzone sm" id="dropzoneNew">
+            <input type="file" id="fileInputNew" accept=".xlsx,.xls">
+            <div class="icon">⬆</div>
+            <div class="main">Chọn file TieuChiMoi.xlsx</div>
+            <div class="hint">Có sheet TongHop và ThuocTinh</div>
+          </div>
+          <div class="file-chip" id="fileChipNew">
+            <span class="name" id="fileNameNew"></span>
+            <button class="remove" id="fileRemoveNew">Gỡ bỏ</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2><span class="step-no">2</span>Quy tắc đối chiếu &amp; bộ lọc phân loại</h2>
+      <p class="desc">Hai file liên kết với nhau qua Số hiệu tờ bản đồ + Số thứ tự thửa đất. Có thể điều chỉnh cột khóa, dòng bắt đầu, cột phân loại.</p>
+      <div class="keymap keymap3">
+        <div class="card">
+          <div class="sheet-name">TieuChicu.xlsx — TongHop (cũ)</div>
+          <div class="field"><label>Cột khóa 1 (tờ bản đồ)</label><input type="text" class="col-input" id="t2OldKey1" value="C" maxlength="3"></div>
+          <div class="field"><label>Cột khóa 2 (thửa đất)</label><input type="text" class="col-input" id="t2OldKey2" value="D" maxlength="3"></div>
+          <div class="field"><label>Dòng bắt đầu dữ liệu</label><input type="number" class="row-input" id="t2OldStart" value="10" min="1"></div>
+          <div class="field"><label>Cột phân loại</label><input type="text" class="col-input" id="t2OldClassCol" value="O" maxlength="3"></div>
+        </div>
+        <div class="card">
+          <div class="sheet-name">TieuChiMoi.xlsx — TongHop (mới)</div>
+          <div class="field"><label>Cột khóa 1 (tờ bản đồ)</label><input type="text" class="col-input" id="t2NewTgKey1" value="C" maxlength="3"></div>
+          <div class="field"><label>Cột khóa 2 (thửa đất)</label><input type="text" class="col-input" id="t2NewTgKey2" value="D" maxlength="3"></div>
+          <div class="field"><label>Dòng bắt đầu dữ liệu</label><input type="number" class="row-input" id="t2NewTgStart" value="10" min="1"></div>
+          <div class="field"><label>Cột phân loại</label><input type="text" class="col-input" id="t2NewClassCol" value="P" maxlength="3"></div>
+        </div>
+        <div class="card">
+          <div class="sheet-name">TieuChiMoi.xlsx — ThuocTinh</div>
+          <div class="field"><label>Cột khóa 1 (tờ bản đồ)</label><input type="text" class="col-input" id="t2NewThKey1" value="Q" maxlength="3"></div>
+          <div class="field"><label>Cột khóa 2 (thửa đất)</label><input type="text" class="col-input" id="t2NewThKey2" value="R" maxlength="3"></div>
+          <div class="field"><label>Dòng bắt đầu dữ liệu</label><input type="number" class="row-input" id="t2NewThStart" value="7" min="1"></div>
+        </div>
+      </div>
+      <div class="keyform-actions"><button class="btn-reset" id="t2ResetKeys" type="button">↺ Khôi phục mặc định</button></div>
+
+      <div class="filter-box">
+        <div class="filter-head">
+          <span class="up-label" style="margin:0;">A. Chọn phân loại thửa nhóm 1, nhóm 2 hoặc các nhóm trong bảng TongHop của file Excel (TieuChicu) để so sánh với các thửa theo phân loại mới trong Excel (TieuChiMoi)</span>
+          <button class="btn-reset" id="t2RescanGroups" type="button">🔄 Quét lại danh sách nhóm</button>
+        </div>
+        <p class="desc" style="margin:6px 0 10px;">Chỉ đối chiếu với các nhóm được chọn bên dưới. Bỏ chọn một nhóm sẽ khiến các thửa thuộc nhóm đó — và toàn bộ thửa mới phát sinh — bị <b>loại khỏi</b> sheet Tonghop_TieuChiMoi (không chỉ gắn nhãn). Bỏ trống mọi lựa chọn tương đương "Tất cả". Tự động quét sau khi tải file TieuChicu, có thể quét lại nếu đổi cột/dòng cấu hình.</p>
+        <div class="filter-chips" id="t2FilterChips">
+          <span class="filter-empty" id="t2FilterEmpty">Chưa có dữ liệu — hãy tải file TieuChicu.xlsx ở Bước 1.</span>
+        </div>
+      </div>
+
+      <div class="up-label" style="margin:18px 0 8px;">B. Thêm các sheet dữ liệu mới gồm: Sheet  Tonghop_TieuChiMoi + Sheet mới Thuoctinh_TieuChiMoi vào kết quả</div>
+      <div class="append-note">
+        Sheet mới <b>Tonghop_TieuChiMoi</b> = nền dữ liệu TongHop của TieuChiMoi <b>đã qua lọc</b> (chỉ giữ dòng khớp nhóm được chọn ở trên, hoặc tất cả nếu không lọc), gắn thêm 1 cột <b>Kết quả so sánh phân loại (cũ – mới)</b> ở cuối bảng: "<i>Nhóm X duy trì</i>" (khớp khóa, cùng nhóm) / "<i>Nhóm X sang Nhóm Y do tiêu chí mới</i>" (khớp khóa, khác nhóm) / "<i>Thửa mới phát sinh</i>" (không khớp khóa với TieuChicu). Kèm bảng báo cáo tóm tắt ở góc trên bên phải bảng.
+      </div>
+      <div class="report-note">
+        Sheet mới <b>Thuoctinh_TieuChiMoi</b> = nền dữ liệu ThuocTinh của TieuChiMoi (giữ <b>toàn bộ</b> các dòng, không lọc), gắn thêm 11 cột từ <b>AC</b>: cột phân loại (mặc định O, có thể đổi thành P nếu dùng "Phân loại dữ liệu sau khi rà soát"), cột V, cột W, X→AD, và cột <b>Kết quả so sánh phân loại</b> — lấy theo khóa liên kết, giống hệt Công cụ 1. Dòng nào không khớp/không thuộc nhóm được đối chiếu sẽ để trống ở các cột này. Tiêu đề các cột mới màu xanh dương.
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2><span class="step-no">3</span>Xử lý &amp; xuất file</h2>
+      <p class="desc">Toàn bộ sheet gốc của TieuChiMoi.xlsx được giữ nguyên định dạng. Hai sheet Tonghop_TieuChiMoi và Thuoctinh_TieuChiMoi sẽ được tạo tự động.</p>
+      <button class="btn btn-primary" id="t2ProcessBtn" disabled>
+        <span class="spinner" id="t2Spinner"></span>
+        <span id="t2ProcessLabel">Xử lý &amp; Xuất file</span>
+      </button>
+      <div class="log" id="t2Log"></div>
+    </div>
+
+    <div class="panel result" id="t2ResultPanel">
+      <h2><span class="step-no">✓</span>Hoàn tất</h2>
+      <div class="stat-grid">
+        <div class="stat"><div class="num" id="t2StatTotal">—</div><div class="lbl">Dòng TongHop (mới) đã xử lý</div></div>
+        <div class="stat good"><div class="num" id="t2StatMatched">—</div><div class="lbl">Khớp khóa tờ – thửa với TieuChicu</div></div>
+        <div class="stat warn"><div class="num" id="t2StatUnmatched">—</div><div class="lbl">Không khớp — thửa mới phát sinh</div></div>
+      </div>
+      <div class="breakdown" id="t2Breakdown"></div>
+      <div class="download-row">
+        <button class="btn btn-gold" id="t2DownloadBtn">⬇ Tải file kết quả</button>
+        <span class="fname" id="t2OutFileName"></span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer-note"><span class="lock">●</span> Toàn bộ xử lý diễn ra ngay trên trình duyệt của bạn — file không được tải lên bất kỳ máy chủ nào.<br><i>Nguồn: Phòng CSDL -VPĐK tỉnh An Giang</i></div>
+
+</div>
+
+<script>
+(function(){
+
+  // ================= shared helpers =================
+  function ensureExcelJS(){
+    return new Promise((resolve, reject) => {
+      const t0 = Date.now();
+      (function check(){
+        if (typeof ExcelJS !== 'undefined') return resolve();
+        if (window.__EXCELJS_FAILED__ || Date.now() - t0 > 15000){
+          return reject(new Error('Không tải được thư viện xử lý Excel (ExcelJS). Vui lòng kiểm tra kết nối Internet rồi tải lại trang (F5).'));
+        }
+        setTimeout(check, 150);
+      })();
+    });
+  }
+
+  function normalizeSheetName(name){
+    return name.normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/đ/gi,'d').replace(/[_\s]+/g,'').toLowerCase();
+  }
+
+  function cellText(cell){
+    if (!cell) return '';
+    let v = cell.value;
+    if (v === null || v === undefined) return '';
+    if (typeof v === 'object'){
+      if (v.richText) return v.richText.map(rt => rt.text).join('');
+      if (v.result !== undefined) return v.result === null || v.result === undefined ? '' : String(v.result);
+      if (v.text !== undefined) return String(v.text);
+      if (v instanceof Date) return v.toISOString();
+      return '';
+    }
+    return String(v);
+  }
+
+  function colLetter(n){
+    let s = '';
+    while (n > 0){
+      const m = (n - 1) % 26;
+      s = String.fromCharCode(65 + m) + s;
+      n = Math.floor((n - 1) / 26);
+    }
+    return s;
+  }
+
+  function parseColRef(str){
+    if (!str) return null;
+    str = String(str).trim().toUpperCase();
+    if (/^[0-9]+$/.test(str)){ const n = parseInt(str,10); return n > 0 ? n : null; }
+    if (/^[A-Z]{1,3}$/.test(str)){
+      let n = 0;
+      for (let i=0;i<str.length;i++) n = n*26 + (str.charCodeAt(i)-64);
+      return n;
+    }
+    return null;
+  }
+
+  function findDataEnd(sheet, startRow, checkCol){
+    let end = startRow - 1;
+    let r = startRow;
+    while (true){
+      const v = cellText(sheet.getRow(r).getCell(checkCol));
+      if (v === '') break;
+      end = r;
+      r++;
+      if (r > startRow + 1100000) break;
+    }
+    return end;
+  }
+
+  function cloneWorksheet(workbook, srcSheet, newName){
+    const newSheet = workbook.addWorksheet(newName, {
+      views: (srcSheet.views && srcSheet.views.length) ? JSON.parse(JSON.stringify(srcSheet.views)) : []
+    });
+    const colCount = Math.max(srcSheet.columnCount || 0, srcSheet.actualColumnCount || 0, 40);
+    for (let c = 1; c <= colCount; c++){
+      const srcCol = srcSheet.getColumn(c);
+      if (srcCol && srcCol.width) newSheet.getColumn(c).width = srcCol.width;
+    }
+    const rowCount = Math.max(srcSheet.rowCount || 0, srcSheet.actualRowCount || 0);
+    for (let r = 1; r <= rowCount; r++){
+      const srcRow = srcSheet.getRow(r);
+      const newRow = newSheet.getRow(r);
+      if (srcRow.height) newRow.height = srcRow.height;
+      srcRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        const newCell = newRow.getCell(colNumber);
+        newCell.value = cell.value;
+        try { if (cell.style) newCell.style = JSON.parse(JSON.stringify(cell.style)); } catch(e){}
+      });
+      newRow.commit();
+    }
+    const merges = (srcSheet.model && srcSheet.model.merges) ? srcSheet.model.merges : [];
+    merges.forEach(range => { try { newSheet.mergeCells(range); } catch(e){} });
+    return newSheet;
+  }
+
+  function sanitizeForFilename(str){
+    if (!str) return '';
+    return str.trim().replace(/[^\p{L}\p{N}_]+/gu, '_').replace(/_+/g,'_').replace(/^_|_$/g,'');
+  }
+
+  function markValid(el){ el.classList.remove('invalid'); }
+  function markInvalid(el){ el.classList.add('invalid'); }
+
+  const FONT_HDR = { name:'Times New Roman', size:12, bold:true, color:{argb:'FF0000FF'} };
+  const ALIGN_HDR = { horizontal:'center', vertical:'middle', wrapText:true };
+  const BORDER_THIN = { top:{style:'thin'}, bottom:{style:'thin'}, left:{style:'thin'}, right:{style:'thin'} };
+  const FONT_DATA = { name:'Times New Roman', size:11 };
+  const ALIGN_DATA = { horizontal:'center', vertical:'middle', wrapText:true };
+
+  // ================= tab switching =================
+  const tabBtns = document.querySelectorAll('.tab-btn');
+  const toolPanels = { tool1: document.getElementById('tool1Panel'), tool2: document.getElementById('tool2Panel') };
+  tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      tabBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      Object.keys(toolPanels).forEach(k => toolPanels[k].classList.remove('active'));
+      toolPanels[btn.dataset.tab].classList.add('active');
+    });
+  });
+
+  // ================= generic log helper factory =================
+  function makeLogger(logEl){
+    return function log(msg, kind){
+      kind = kind || 'info';
+      logEl.classList.add('show');
+      const line = document.createElement('div');
+      line.className = 'line ' + kind;
+      const t = document.createElement('span');
+      t.className = 't';
+      t.textContent = new Date().toLocaleTimeString('vi-VN', {hour12:false});
+      const m = document.createElement('span');
+      m.className = 'm';
+      m.textContent = msg;
+      line.appendChild(t); line.appendChild(m);
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+    };
+  }
+
+  // ================= generic single-file dropzone wiring =================
+  function wireDropzone(opts){
+    const { dropzone, fileInput, fileChip, fileNameEl, removeBtn, onLoaded, onCleared, accept } = opts;
+    dropzone.addEventListener('click', () => fileInput.click());
+    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+    dropzone.addEventListener('drop', e => {
+      e.preventDefault(); dropzone.classList.remove('drag');
+      if (e.dataTransfer.files.length) handle(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', e => { if (e.target.files.length) handle(e.target.files[0]); });
+    removeBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      fileChip.classList.remove('show');
+      fileInput.value = '';
+      onCleared();
+    });
+    function handle(file){
+      if (!/\.(xlsx|xls)$/i.test(file.name)){ alert('Vui lòng chọn file Excel (.xlsx)'); return; }
+      const reader = new FileReader();
+      reader.onload = e => {
+        fileNameEl.textContent = file.name + '  ·  ' + (file.size/1024).toFixed(0) + ' KB';
+        fileChip.classList.add('show');
+        onLoaded(e.target.result, file.name);
+      };
+      reader.onerror = () => alert('Không đọc được file. Vui lòng thử lại.');
+      reader.readAsArrayBuffer(file);
+    }
+  }
+
+  // ===================================================================
+  // ============================ TOOL 1 ==============================
+  // ===================================================================
+  (function tool1(){
+    const processBtn = document.getElementById('processBtn');
+    const spinner = document.getElementById('spinner');
+    const processLabel = document.getElementById('processLabel');
+    const logEl = document.getElementById('log');
+    const resultPanel = document.getElementById('resultPanel');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const outFileNameEl = document.getElementById('outFileName');
+    const log = makeLogger(logEl);
+
+    let currentBuffer = null;
+    let currentFileLabel = '';
+    let outputBlobUrl = null;
+    let outputName = '';
+
+    wireDropzone({
+      dropzone: document.getElementById('dropzone'),
+      fileInput: document.getElementById('fileInput'),
+      fileChip: document.getElementById('fileChip'),
+      fileNameEl: document.getElementById('fileName'),
+      removeBtn: document.getElementById('fileRemove'),
+      onLoaded: (buf, name) => {
+        currentBuffer = buf; currentFileLabel = name;
+        processBtn.disabled = false;
+        resultPanel.classList.remove('show');
+        logEl.classList.remove('show'); logEl.innerHTML = '';
+      },
+      onCleared: () => {
+        currentBuffer = null; processBtn.disabled = true;
+        resultPanel.classList.remove('show'); logEl.classList.remove('show'); logEl.innerHTML = '';
+      }
+    });
+
+    const DEFAULTS = { tgKey1:'C', tgKey2:'D', tgStart:'10', thKey1:'Q', thKey2:'R', thStart:'7' };
+    const ids = { tgKey1:'t1TgKey1', tgKey2:'t1TgKey2', tgStart:'t1TgStart', thKey1:'t1ThKey1', thKey2:'t1ThKey2', thStart:'t1ThStart' };
+    document.getElementById('t1ResetKeys').addEventListener('click', () => {
+      Object.keys(DEFAULTS).forEach(k => { document.getElementById(ids[k]).value = DEFAULTS[k]; markValid(document.getElementById(ids[k])); });
+    });
+
+    function readKeyConfig(){
+      const el = k => document.getElementById(ids[k]);
+      const tgKey1 = parseColRef(el('tgKey1').value);
+      const tgKey2 = parseColRef(el('tgKey2').value);
+      const tgStart = parseInt(el('tgStart').value, 10);
+      const thKey1 = parseColRef(el('thKey1').value);
+      const thKey2 = parseColRef(el('thKey2').value);
+      const thStart = parseInt(el('thStart').value, 10);
+      let ok = true;
+      [['tgKey1',tgKey1],['tgKey2',tgKey2],['thKey1',thKey1],['thKey2',thKey2]].forEach(([k,v]) => {
+        if (v === null) { markInvalid(el(k)); ok = false; } else markValid(el(k));
+      });
+      [['tgStart',tgStart],['thStart',thStart]].forEach(([k,v]) => {
+        if (!Number.isInteger(v) || v < 1) { markInvalid(el(k)); ok = false; } else markValid(el(k));
+      });
+      return ok ? { tgKey1, tgKey2, tgStart, thKey1, thKey2, thStart } : null;
+    }
+
+    processBtn.addEventListener('click', async () => {
+      if (!currentBuffer) return;
+      processBtn.disabled = true; spinner.classList.add('show');
+      processLabel.textContent = 'Đang xử lý…';
+      logEl.innerHTML = ''; resultPanel.classList.remove('show');
+      try { await runProcess(); }
+      catch (err){ console.error(err); log('Lỗi: ' + (err && err.message ? err.message : String(err)), 'err'); }
+      finally { spinner.classList.remove('show'); processLabel.textContent = 'Xử lý & Xuất file'; processBtn.disabled = false; }
+    });
+
+    async function runProcess(){
+      const cfg = readKeyConfig();
+      if (!cfg){ log('Cấu hình khóa liên kết không hợp lệ. Vui lòng kiểm tra lại cột/dòng.', 'err'); return; }
+
+      log('Đang đọc file ' + currentFileLabel + '…', 'info');
+      await ensureExcelJS();
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(currentBuffer.slice(0));
+
+      let tgSheet = null, thSheet = null;
+      workbook.worksheets.forEach(ws => {
+        const n = normalizeSheetName(ws.name);
+        if (n === 'tonghop') tgSheet = ws;
+        if (n === 'thuoctinh') thSheet = ws;
+      });
+      if (!tgSheet){ log('Không tìm thấy sheet TongHop trong file.', 'err'); return; }
+      if (!thSheet){ log('Không tìm thấy sheet ThuocTinh trong file.', 'err'); return; }
+      log('Đã tìm thấy sheet "' + tgSheet.name + '" và "' + thSheet.name + '".', 'ok');
+      log('Khóa TongHop: cột ' + colLetter(cfg.tgKey1) + '/' + colLetter(cfg.tgKey2) + ' từ dòng ' + cfg.tgStart + '. Khóa ThuocTinh: cột ' + colLetter(cfg.thKey1) + '/' + colLetter(cfg.thKey2) + ' từ dòng ' + cfg.thStart + '.', 'info');
+
+      const TG_DATA_END = findDataEnd(tgSheet, cfg.tgStart, 1);
+      const TH_DATA_END = findDataEnd(thSheet, cfg.thStart, 1);
+      if (TG_DATA_END < cfg.tgStart){ log('Không tìm thấy dữ liệu từ dòng ' + cfg.tgStart + ' trong sheet TongHop.', 'err'); return; }
+      if (TH_DATA_END < cfg.thStart){ log('Không tìm thấy dữ liệu từ dòng ' + cfg.thStart + ' trong sheet ThuocTinh.', 'err'); return; }
+      log('TongHop: dòng ' + cfg.tgStart + ' → ' + TG_DATA_END + ' (' + (TG_DATA_END-cfg.tgStart+1) + ' dòng).', 'info');
+      log('ThuocTinh: dòng ' + cfg.thStart + ' → ' + TH_DATA_END + ' (' + (TH_DATA_END-cfg.thStart+1) + ' dòng).', 'info');
+
+      const TG_COLS = [15, 22, 23, 24, 25, 26, 27, 28, 29, 30];
+      const TG_LABELS = {
+        15: 'Phân loại dữ liệu theo VB 515/KH-BCA-BNNMT',
+        22: 'Chủ sử dụng / sở hữu', 23: 'Thửa đất', 24: 'Tài sản gắn liền với đất',
+        25: 'Giấy chứng nhận', 26: 'Giao dịch / biến động', 27: 'Hồ sơ quét / ký số',
+        28: 'Tham chiếu ĐVHC (cập nhật tự đồng lại)', 29: 'Số khối còn thiếu', 30: 'Số trường còn thiếu'
+      };
+      const GROUP_LABEL = 'THÔNG TIN CÒN THIẾU THEO KHỐI DỮ LIỆU (MÔ TẢ XML VNLIS)';
+      const APPEND_START = 29; // AC
+
+      log('Đang lập chỉ mục khóa liên kết từ TongHop…', 'info');
+      const tgMap = new Map();
+      for (let r = cfg.tgStart; r <= TG_DATA_END; r++){
+        const row = tgSheet.getRow(r);
+        const k1 = cellText(row.getCell(cfg.tgKey1)).trim();
+        const k2 = cellText(row.getCell(cfg.tgKey2)).trim();
+        if (k1 === '' && k2 === '') continue;
+        const key = k1 + '|' + k2;
+        const rec = {};
+        TG_COLS.forEach(c => { rec[c] = cellText(row.getCell(c)); });
+        tgMap.set(key, rec);
+      }
+      log('Đã lập chỉ mục ' + tgMap.size + ' khóa từ TongHop.', 'ok');
+
+      if (workbook.getWorksheet('tonghop_xa')) workbook.removeWorksheet(workbook.getWorksheet('tonghop_xa').id);
+      log('Đang tạo sheet tonghop_xa (nền dữ liệu ThuocTinh)…', 'info');
+      const newSheet = cloneWorksheet(workbook, thSheet, 'tonghop_xa');
+
+      function styleHeaderCell(cell){ cell.font = FONT_HDR; cell.alignment = ALIGN_HDR; cell.border = BORDER_THIN; }
+
+      const oCell = newSheet.getCell(3, APPEND_START);
+      oCell.value = TG_LABELS[15];
+      newSheet.mergeCells(3, APPEND_START, 5, APPEND_START);
+      for (let rr = 3; rr <= 5; rr++) styleHeaderCell(newSheet.getCell(rr, APPEND_START));
+
+      const groupStart = APPEND_START + 1;
+      const groupEnd = APPEND_START + TG_COLS.length - 1;
+      newSheet.getCell(3, groupStart).value = GROUP_LABEL;
+      newSheet.mergeCells(3, groupStart, 3, groupEnd);
+      for (let cc = groupStart; cc <= groupEnd; cc++) styleHeaderCell(newSheet.getCell(3, cc));
+
+      TG_COLS.slice(1).forEach((col, i) => {
+        const cc = groupStart + i;
+        newSheet.getCell(4, cc).value = TG_LABELS[col];
+        newSheet.mergeCells(4, cc, 5, cc);
+        styleHeaderCell(newSheet.getCell(4, cc));
+        styleHeaderCell(newSheet.getCell(5, cc));
+      });
+
+      let startNum = 29;
+      TG_COLS.forEach((col, i) => {
+        const cc = APPEND_START + i;
+        const cell = newSheet.getCell(6, cc);
+        cell.value = startNum + i;
+        styleHeaderCell(cell);
+      });
+      for (let i = 0; i < TG_COLS.length; i++) newSheet.getColumn(APPEND_START + i).width = 18;
+
+      log('Đang đối chiếu và nạp dữ liệu…', 'info');
+      let matched = 0, unmatched = 0;
+      for (let r = cfg.thStart; r <= TH_DATA_END; r++){
+        const row = thSheet.getRow(r);
+        const k1 = cellText(row.getCell(cfg.thKey1)).trim();
+        const k2 = cellText(row.getCell(cfg.thKey2)).trim();
+        const key = k1 + '|' + k2;
+        const rec = tgMap.get(key);
+        if (rec) matched++; else unmatched++;
+        TG_COLS.forEach((col, i) => {
+          const cc = APPEND_START + i;
+          const cell = newSheet.getCell(r, cc);
+          cell.value = rec ? (rec[col] || '') : '';
+          cell.font = FONT_DATA; cell.alignment = ALIGN_DATA; cell.border = BORDER_THIN;
+        });
+      }
+      log('Khớp được ' + matched + ' / ' + (TH_DATA_END-cfg.thStart+1) + ' dòng. Không khớp: ' + unmatched + '.', unmatched > 0 ? 'info' : 'ok');
+
+      // ---- summary report (row 1, from column AC) ----
+      log('Đang tổng hợp báo cáo phân loại…', 'info');
+      const classCounts = new Map();
+      for (let r = cfg.thStart; r <= TH_DATA_END; r++){
+        const v = cellText(newSheet.getCell(r, APPEND_START)).trim();
+        if (v === '') continue;
+        classCounts.set(v, (classCounts.get(v)||0)+1);
+      }
+      const classKeys = Array.from(classCounts.keys()).sort((a,b) => {
+        const na = a.match(/(\d+)/), nb = b.match(/(\d+)/);
+        if (na && nb) return parseInt(na[1]) - parseInt(nb[1]);
+        return a.localeCompare(b, 'vi');
+      });
+      const suppCounts = {};
+      TG_COLS.slice(1).forEach((col, i) => {
+        const cc = groupStart + i;
+        let cnt = 0;
+        for (let r = cfg.thStart; r <= TH_DATA_END; r++){
+          if (cellText(newSheet.getCell(r, cc)).trim() !== '') cnt++;
+        }
+        suppCounts[col] = cnt;
+      });
+
+      const pairs = [];
+      classKeys.forEach(k => pairs.push([k, classCounts.get(k)]));
+      TG_COLS.slice(1).forEach(col => pairs.push([TG_LABELS[col] + ' – cần bổ sung', suppCounts[col]]));
+
+      const reportCol = APPEND_START;
+      const reportWidth = Math.max(pairs.length * 2, 2);
+      const titleFont = { name:'Times New Roman', size:13, bold:true, color:{argb:'FFFFFFFF'} };
+      const titleFill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF17324C'} };
+      const lblFont = { name:'Times New Roman', size:11, bold:true, color:{argb:'FF17324C'} };
+      const lblFill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFE8D9B8'} };
+      const valFont = { name:'Times New Roman', size:12, bold:true, color:{argb:'FFB4842A'} };
+
+      newSheet.getCell(1, reportCol).value = 'KẾT QUẢ BÁO CÁO TÓM TẮT';
+      newSheet.mergeCells(1, reportCol, 1, reportCol + reportWidth - 1);
+      for (let c = reportCol; c <= reportCol + reportWidth - 1; c++){
+        const cc = newSheet.getCell(1, c);
+        cc.font = titleFont; cc.fill = titleFill;
+        cc.alignment = { horizontal:'center', vertical:'middle' };
+        cc.border = BORDER_THIN;
+      }
+      newSheet.getRow(1).height = 22;
+
+      pairs.forEach((p, i) => {
+        const lc = reportCol + i*2, vc = lc + 1;
+        const lCell = newSheet.getCell(2, lc);
+        lCell.value = p[0]; lCell.font = lblFont; lCell.fill = lblFill;
+        lCell.alignment = { horizontal:'center', vertical:'middle', wrapText:true };
+        lCell.border = BORDER_THIN;
+        newSheet.getColumn(lc).width = 24;
+
+        const vCell = newSheet.getCell(2, vc);
+        vCell.value = p[1]; vCell.font = valFont;
+        vCell.alignment = { horizontal:'center', vertical:'middle' };
+        vCell.border = BORDER_THIN;
+        newSheet.getColumn(vc).width = 10;
+      });
+      newSheet.getRow(2).height = 40;
+      log('Báo cáo tóm tắt: ' + pairs.map(p => p[0] + '=' + p[1]).join(', '), 'ok');
+
+      let commune = '';
+      try { commune = cellText(tgSheet.getRow(cfg.tgStart).getCell(2)).trim(); } catch(e){}
+      const safeCommune = sanitizeForFilename(commune);
+      outputName = safeCommune ? ('dulieutonghop_xa_' + safeCommune + '.xlsx') : 'dulieutonghop_xa.xlsx';
+
+      log('Đang tạo file Excel đầu ra…', 'info');
+      const buf = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      if (outputBlobUrl) URL.revokeObjectURL(outputBlobUrl);
+      outputBlobUrl = URL.createObjectURL(blob);
+      log('Hoàn tất. File sẵn sàng để tải xuống.', 'ok');
+
+      document.getElementById('statTotal').textContent = (TH_DATA_END - cfg.thStart + 1);
+      document.getElementById('statMatched').textContent = matched;
+      document.getElementById('statUnmatched').textContent = unmatched;
+      outFileNameEl.textContent = outputName;
+      resultPanel.classList.add('show');
+      resultPanel.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    }
+
+    downloadBtn.addEventListener('click', () => {
+      if (!outputBlobUrl) return;
+      const a = document.createElement('a');
+      a.href = outputBlobUrl; a.download = outputName || 'dulieutonghop_xa.xlsx';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    });
+  })();
+
+  // ===================================================================
+  // ============================ TOOL 2 ==============================
+  // ===================================================================
+  (function tool2(){
+    const processBtn = document.getElementById('t2ProcessBtn');
+    const spinner = document.getElementById('t2Spinner');
+    const processLabel = document.getElementById('t2ProcessLabel');
+    const logEl = document.getElementById('t2Log');
+    const resultPanel = document.getElementById('t2ResultPanel');
+    const downloadBtn = document.getElementById('t2DownloadBtn');
+    const outFileNameEl = document.getElementById('t2OutFileName');
+    const breakdownEl = document.getElementById('t2Breakdown');
+    const filterChipsEl = document.getElementById('t2FilterChips');
+    const log = makeLogger(logEl);
+
+    let oldBuffer = null, oldFileLabel = '';
+    let newBuffer = null, newFileLabel = '';
+    let outputBlobUrl = null;
+    let outputName = 'dulieu_tieuchimoi_xa.xlsx';
+
+    function updateProcessEnabled(){
+      processBtn.disabled = !(oldBuffer && newBuffer);
+    }
+
+    wireDropzone({
+      dropzone: document.getElementById('dropzoneOld'),
+      fileInput: document.getElementById('fileInputOld'),
+      fileChip: document.getElementById('fileChipOld'),
+      fileNameEl: document.getElementById('fileNameOld'),
+      removeBtn: document.getElementById('fileRemoveOld'),
+      onLoaded: (buf, name) => { oldBuffer = buf; oldFileLabel = name; updateProcessEnabled(); resultPanel.classList.remove('show'); rescanGroups(); },
+      onCleared: () => { oldBuffer = null; updateProcessEnabled(); resultPanel.classList.remove('show'); renderFilterChips([]); }
+    });
+    wireDropzone({
+      dropzone: document.getElementById('dropzoneNew'),
+      fileInput: document.getElementById('fileInputNew'),
+      fileChip: document.getElementById('fileChipNew'),
+      fileNameEl: document.getElementById('fileNameNew'),
+      removeBtn: document.getElementById('fileRemoveNew'),
+      onLoaded: (buf, name) => { newBuffer = buf; newFileLabel = name; updateProcessEnabled(); resultPanel.classList.remove('show'); },
+      onCleared: () => { newBuffer = null; updateProcessEnabled(); resultPanel.classList.remove('show'); }
+    });
+
+    const DEFAULTS = {
+      oldKey1:'C', oldKey2:'D', oldStart:'10', oldClassCol:'O',
+      newTgKey1:'C', newTgKey2:'D', newTgStart:'10', newClassCol:'P',
+      newThKey1:'Q', newThKey2:'R', newThStart:'7'
+    };
+    const ids = {
+      oldKey1:'t2OldKey1', oldKey2:'t2OldKey2', oldStart:'t2OldStart', oldClassCol:'t2OldClassCol',
+      newTgKey1:'t2NewTgKey1', newTgKey2:'t2NewTgKey2', newTgStart:'t2NewTgStart', newClassCol:'t2NewClassCol',
+      newThKey1:'t2NewThKey1', newThKey2:'t2NewThKey2', newThStart:'t2NewThStart'
+    };
+    document.getElementById('t2ResetKeys').addEventListener('click', () => {
+      Object.keys(DEFAULTS).forEach(k => { document.getElementById(ids[k]).value = DEFAULTS[k]; markValid(document.getElementById(ids[k])); });
+      rescanGroups();
+    });
+    document.getElementById('t2RescanGroups').addEventListener('click', rescanGroups);
+
+    function readKeyConfig(){
+      const el = k => document.getElementById(ids[k]);
+      const vals = {};
+      let ok = true;
+      ['oldKey1','oldKey2','oldClassCol','newTgKey1','newTgKey2','newClassCol','newThKey1','newThKey2'].forEach(k => {
+        const v = parseColRef(el(k).value);
+        vals[k] = v;
+        if (v === null) { markInvalid(el(k)); ok = false; } else markValid(el(k));
+      });
+      ['oldStart','newTgStart','newThStart'].forEach(k => {
+        const v = parseInt(el(k).value, 10);
+        vals[k] = v;
+        if (!Number.isInteger(v) || v < 1) { markInvalid(el(k)); ok = false; } else markValid(el(k));
+      });
+      return ok ? vals : null;
+    }
+
+    // ---- dynamic classification-group filter (scanned from TieuChicu) ----
+    let selectedGroups = null;  // Set of currently-checked group values (subset of allGroupsFull)
+    let allGroupsFull = null;   // Set of all detected group values (full universe from scan)
+
+    function renderFilterChips(groups){
+      filterChipsEl.innerHTML = '';
+      if (!groups || groups.length === 0){
+        const span = document.createElement('span');
+        span.className = 'filter-empty';
+        span.id = 't2FilterEmpty';
+        span.textContent = 'Chưa có dữ liệu — hãy tải file TieuChicu.xlsx ở Bước 1.';
+        filterChipsEl.appendChild(span);
+        selectedGroups = null; allGroupsFull = null;
+        return;
+      }
+      allGroupsFull = new Set(groups.map(g => g.value));
+      selectedGroups = new Set(groups.map(g => g.value));
+      groups.forEach(g => {
+        const label = document.createElement('label');
+        label.className = 'chip-check checked';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = true;
+        input.addEventListener('change', () => {
+          if (input.checked){ selectedGroups.add(g.value); label.classList.add('checked'); }
+          else { selectedGroups.delete(g.value); label.classList.remove('checked'); }
+        });
+        const txt = document.createElement('span');
+        txt.textContent = g.value;
+        const cnt = document.createElement('span');
+        cnt.className = 'cnt';
+        cnt.textContent = '(' + g.count + ')';
+        label.appendChild(input); label.appendChild(txt); label.appendChild(cnt);
+        filterChipsEl.appendChild(label);
+      });
+    }
+
+    async function rescanGroups(){
+      if (!oldBuffer) { renderFilterChips([]); return; }
+      const el = k => document.getElementById(ids[k]);
+      const classCol = parseColRef(el('oldClassCol').value);
+      const start = parseInt(el('oldStart').value, 10);
+      if (classCol === null || !Number.isInteger(start) || start < 1) return;
+      try {
+        await ensureExcelJS();
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(oldBuffer.slice(0));
+        let sheet = null;
+        wb.worksheets.forEach(ws => { if (normalizeSheetName(ws.name) === 'tonghop') sheet = ws; });
+        if (!sheet) { renderFilterChips([]); return; }
+        const end = findDataEnd(sheet, start, 1);
+        const counts = new Map();
+        for (let r = start; r <= end; r++){
+          const v = cellText(sheet.getRow(r).getCell(classCol)).trim();
+          if (v === '') continue;
+          counts.set(v, (counts.get(v)||0)+1);
+        }
+        const groups = Array.from(counts.entries())
+          .sort((a,b) => { const na=a[0].match(/(\d+)/), nb=b[0].match(/(\d+)/); if (na&&nb) return parseInt(na[1])-parseInt(nb[1]); return a[0].localeCompare(b[0],'vi'); })
+          .map(([value,count]) => ({ value, count }));
+        renderFilterChips(groups);
+      } catch(e){ renderFilterChips([]); }
+    }
+
+    processBtn.addEventListener('click', async () => {
+      if (!oldBuffer || !newBuffer) return;
+      processBtn.disabled = true; spinner.classList.add('show');
+      processLabel.textContent = 'Đang xử lý…';
+      logEl.innerHTML = ''; resultPanel.classList.remove('show'); breakdownEl.innerHTML = '';
+      try { await runProcess(); }
+      catch (err){ console.error(err); log('Lỗi: ' + (err && err.message ? err.message : String(err)), 'err'); }
+      finally { spinner.classList.remove('show'); processLabel.textContent = 'Xử lý & Xuất file'; processBtn.disabled = false; }
+    });
+
+    function tagFor(text){
+      if (text.indexOf('duy trì') !== -1) return 'tag-keep';
+      if (text.indexOf('sang') !== -1) return 'tag-change';
+      if (text.indexOf('mới phát sinh') !== -1) return 'tag-new';
+      return 'tag-excluded';
+    }
+
+    function classColLabel(colIdx){
+      if (colIdx === 15) return 'Phân loại dữ liệu theo VB 515/KH-BCA-BNNMT';
+      if (colIdx === 16) return 'Phân loại dữ liệu sau khi rà soát';
+      return 'Phân loại dữ liệu (cột ' + colLetter(colIdx) + ')';
+    }
+
+    // clone a sheet's header rows verbatim (1..headerEndRow), then write only the
+    // data rows that pass keepFn, compacted sequentially from headerEndRow+1.
+    function cloneWorksheetFiltered(workbook, srcSheet, newName, headerEndRow, dataStartRow, dataEndRow, keepFn){
+      const newSheet = workbook.addWorksheet(newName, {
+        views: (srcSheet.views && srcSheet.views.length) ? JSON.parse(JSON.stringify(srcSheet.views)) : []
+      });
+      const colCount = Math.max(srcSheet.columnCount || 0, srcSheet.actualColumnCount || 0, 40);
+      for (let c = 1; c <= colCount; c++){
+        const srcCol = srcSheet.getColumn(c);
+        if (srcCol && srcCol.width) newSheet.getColumn(c).width = srcCol.width;
+      }
+      function copyRow(srcRowNum, destRowNum){
+        const sr = srcSheet.getRow(srcRowNum);
+        const nr = newSheet.getRow(destRowNum);
+        if (sr.height) nr.height = sr.height;
+        sr.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          const nc = nr.getCell(colNumber);
+          nc.value = cell.value;
+          try { if (cell.style) nc.style = JSON.parse(JSON.stringify(cell.style)); } catch(e){}
+        });
+        nr.commit();
+      }
+      for (let r = 1; r <= headerEndRow; r++) copyRow(r, r);
+      const merges = (srcSheet.model && srcSheet.model.merges) ? srcSheet.model.merges : [];
+      merges.forEach(range => {
+        const m = range.match(/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/);
+        if (m){ const r2 = parseInt(m[4], 10); if (r2 <= headerEndRow){ try { newSheet.mergeCells(range); } catch(e){} } }
+      });
+      let destRow = headerEndRow + 1;
+      const rowMap = new Map();
+      for (let r = dataStartRow; r <= dataEndRow; r++){
+        if (!keepFn(r)) continue;
+        copyRow(r, destRow);
+        rowMap.set(r, destRow);
+        destRow++;
+      }
+      return { sheet: newSheet, lastDataRow: destRow - 1, rowMap };
+    }
+
+    async function runProcess(){
+      const cfg = readKeyConfig();
+      if (!cfg){ log('Cấu hình khóa liên kết / cột phân loại không hợp lệ. Vui lòng kiểm tra lại.', 'err'); return; }
+
+      log('Đang đọc file ' + oldFileLabel + ' (tiêu chí cũ)…', 'info');
+      await ensureExcelJS();
+      const oldWorkbook = new ExcelJS.Workbook();
+      await oldWorkbook.xlsx.load(oldBuffer.slice(0));
+      log('Đang đọc file ' + newFileLabel + ' (tiêu chí mới)…', 'info');
+      const newWorkbook = new ExcelJS.Workbook();
+      await newWorkbook.xlsx.load(newBuffer.slice(0));
+
+      let oldSheet = null;
+      oldWorkbook.worksheets.forEach(ws => { if (normalizeSheetName(ws.name) === 'tonghop') oldSheet = ws; });
+      if (!oldSheet){ log('Không tìm thấy sheet TongHop trong file tiêu chí cũ.', 'err'); return; }
+
+      let tgSheet2 = null, thSheet2 = null;
+      newWorkbook.worksheets.forEach(ws => {
+        const n = normalizeSheetName(ws.name);
+        if (n === 'tonghop') tgSheet2 = ws;
+        if (n === 'thuoctinh') thSheet2 = ws;
+      });
+      if (!tgSheet2){ log('Không tìm thấy sheet TongHop trong file tiêu chí mới.', 'err'); return; }
+      if (!thSheet2){ log('Không tìm thấy sheet ThuocTinh trong file tiêu chí mới.', 'err'); return; }
+
+      log('Đã tìm thấy: TongHop (cũ), TongHop + ThuocTinh (mới).', 'ok');
+      log('Khóa cũ: cột ' + colLetter(cfg.oldKey1) + '/' + colLetter(cfg.oldKey2) + ' từ dòng ' + cfg.oldStart + ', phân loại cột ' + colLetter(cfg.oldClassCol) + '.', 'info');
+      log('Khóa TongHop (mới): cột ' + colLetter(cfg.newTgKey1) + '/' + colLetter(cfg.newTgKey2) + ' từ dòng ' + cfg.newTgStart + ', phân loại cột ' + colLetter(cfg.newClassCol) + '.', 'info');
+      log('Khóa ThuocTinh (mới): cột ' + colLetter(cfg.newThKey1) + '/' + colLetter(cfg.newThKey2) + ' từ dòng ' + cfg.newThStart + '.', 'info');
+
+      const oldDataEnd = findDataEnd(oldSheet, cfg.oldStart, 1);
+      const newTgDataEnd = findDataEnd(tgSheet2, cfg.newTgStart, 1);
+      const newThDataEnd = findDataEnd(thSheet2, cfg.newThStart, 1);
+      if (oldDataEnd < cfg.oldStart){ log('Không tìm thấy dữ liệu từ dòng ' + cfg.oldStart + ' trong sheet TongHop (cũ).', 'err'); return; }
+      if (newTgDataEnd < cfg.newTgStart){ log('Không tìm thấy dữ liệu từ dòng ' + cfg.newTgStart + ' trong sheet TongHop (mới).', 'err'); return; }
+      if (newThDataEnd < cfg.newThStart){ log('Không tìm thấy dữ liệu từ dòng ' + cfg.newThStart + ' trong sheet ThuocTinh (mới).', 'err'); return; }
+      log('TongHop (cũ): dòng ' + cfg.oldStart + ' → ' + oldDataEnd + '.', 'info');
+      log('TongHop (mới): dòng ' + cfg.newTgStart + ' → ' + newTgDataEnd + '.', 'info');
+      log('ThuocTinh (mới): dòng ' + cfg.newThStart + ' → ' + newThDataEnd + '.', 'info');
+
+      // ---- build FULL (unfiltered) old classification lookup ----
+      log('Đang lập chỉ mục phân loại cũ…', 'info');
+      const fullOldMap = new Map();
+      for (let r = cfg.oldStart; r <= oldDataEnd; r++){
+        const row = oldSheet.getRow(r);
+        const k1 = cellText(row.getCell(cfg.oldKey1)).trim();
+        const k2 = cellText(row.getCell(cfg.oldKey2)).trim();
+        if (k1 === '' && k2 === '') continue;
+        fullOldMap.set(k1 + '|' + k2, cellText(row.getCell(cfg.oldClassCol)).trim());
+      }
+      log('Đã lập chỉ mục ' + fullOldMap.size + ' khóa từ dữ liệu cũ.', 'ok');
+      const filterActive = allGroupsFull !== null && selectedGroups.size < allGroupsFull.size;
+      if (filterActive) log('Bộ lọc đang áp dụng — chỉ giữ lại: ' + Array.from(selectedGroups).join(', ') + '. Các thửa thuộc nhóm khác (và thửa mới phát sinh) sẽ không đưa vào Tonghop_TieuChiMoi.', 'info');
+      else log('Không áp dụng bộ lọc — đối chiếu với tất cả các nhóm.', 'info');
+
+      // ---- pass 1: classify every row (matched/unmatched, keep/exclude, label) ----
+      const COLOR_GREEN = { argb:'FF2E7D5C' }, COLOR_GOLD = { argb:'FFB4842A' }, COLOR_RED = { argb:'FFAE4234' };
+      let matchedKeys = 0, unmatchedKeys = 0;
+      const breakdown = new Map();
+      const perKeyComparison = new Map(); // key -> {text, color} for kept rows only
+      const keepRows = new Set();
+
+      for (let r = cfg.newTgStart; r <= newTgDataEnd; r++){
+        const row = tgSheet2.getRow(r);
+        const k1 = cellText(row.getCell(cfg.newTgKey1)).trim();
+        const k2 = cellText(row.getCell(cfg.newTgKey2)).trim();
+        const key = k1 + '|' + k2;
+        const newVal = cellText(row.getCell(cfg.newClassCol)).trim();
+        const oldExists = fullOldMap.has(key);
+        if (oldExists) matchedKeys++; else unmatchedKeys++;
+
+        let keep;
+        if (!filterActive) keep = true;
+        else keep = oldExists && selectedGroups.has(fullOldMap.get(key));
+        if (!keep) continue;
+        keepRows.add(r);
+
+        let text, color;
+        if (oldExists){
+          const oldVal = fullOldMap.get(key);
+          if (oldVal === newVal){ text = oldVal + ' duy trì'; color = COLOR_GREEN; }
+          else { text = oldVal + ' sang ' + (newVal || '(chưa phân loại)') + ' do tiêu chí mới'; color = COLOR_GOLD; }
+        } else {
+          text = 'Thửa mới phát sinh' + (newVal ? ' - ' + newVal : '');
+          color = COLOR_RED;
+        }
+        breakdown.set(text, (breakdown.get(text)||0)+1);
+        perKeyComparison.set(key, { text, color });
+      }
+      const totalNew = newTgDataEnd - cfg.newTgStart + 1;
+      const includedCount = keepRows.size;
+      log('Đã đối chiếu ' + totalNew + ' dòng. Khớp khóa: ' + matchedKeys + '. Không khớp (thửa mới phát sinh): ' + unmatchedKeys + '. Đưa vào báo cáo sau lọc: ' + includedCount + '.', 'ok');
+
+      // ---- Step A: Tonghop_TieuChiMoi = filtered/compacted clone of TongHop(new) + comparison column ----
+      if (newWorkbook.getWorksheet('Tonghop_TieuChiMoi')) newWorkbook.removeWorksheet(newWorkbook.getWorksheet('Tonghop_TieuChiMoi').id);
+      log('Đang tạo sheet Tonghop_TieuChiMoi…', 'info');
+      const headerLastRow = Math.max(cfg.newTgStart - 1, 1);
+      const { sheet: tgClone, rowMap: tgRowMap } = cloneWorksheetFiltered(
+        newWorkbook, tgSheet2, 'Tonghop_TieuChiMoi', headerLastRow, cfg.newTgStart, newTgDataEnd, r => keepRows.has(r)
+      );
+
+      const cmpCol = Math.max(tgClone.columnCount || 0, tgClone.actualColumnCount || 0) + 1;
+      const reportCol = cmpCol + 1;
+
+      function styleHeaderCell(cell){ cell.font = FONT_HDR; cell.alignment = ALIGN_HDR; cell.border = BORDER_THIN; }
+
+      tgClone.getCell(1, cmpCol).value = 'Kết quả so sánh phân loại (cũ – mới)';
+      tgClone.mergeCells(1, cmpCol, headerLastRow, cmpCol);
+      for (let rr = 1; rr <= headerLastRow; rr++) styleHeaderCell(tgClone.getCell(rr, cmpCol));
+      tgClone.getColumn(cmpCol).width = 26;
+
+      for (let srcRow = cfg.newTgStart; srcRow <= newTgDataEnd; srcRow++){
+        if (!keepRows.has(srcRow)) continue;
+        const destRow = tgRowMap.get(srcRow);
+        const row = tgClone.getRow(destRow);
+        const k1 = cellText(row.getCell(cfg.newTgKey1)).trim();
+        const k2 = cellText(row.getCell(cfg.newTgKey2)).trim();
+        const cmp = perKeyComparison.get(k1 + '|' + k2);
+        const cell = tgClone.getCell(destRow, cmpCol);
+        cell.value = cmp ? cmp.text : '';
+        cell.font = { name:'Times New Roman', size:11, bold:true, color: cmp ? cmp.color : { argb:'FF6B7280' } };
+        cell.alignment = ALIGN_DATA; cell.border = BORDER_THIN;
+      }
+
+      // ---- summary report block (row 1, right of the comparison column) ----
+      const pairs = [
+        ['Khớp khóa tờ – thửa', matchedKeys],
+        ['Không khớp — thửa mới phát sinh', unmatchedKeys],
+        ['Đưa vào báo cáo (sau lọc)', includedCount]
+      ];
+      Array.from(breakdown.entries()).sort((a,b) => b[1]-a[1]).forEach(([k,v]) => pairs.push([k, v]));
+
+      const reportWidth = Math.max(pairs.length * 2, 2);
+      const titleFont = { name:'Times New Roman', size:13, bold:true, color:{argb:'FFFFFFFF'} };
+      const titleFill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF17324C'} };
+      const lblFont = { name:'Times New Roman', size:11, bold:true, color:{argb:'FF17324C'} };
+      const lblFill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFE8D9B8'} };
+      const valFont = { name:'Times New Roman', size:12, bold:true, color:{argb:'FFB4842A'} };
+
+      tgClone.getCell(1, reportCol).value = 'KẾT QUẢ BÁO CÁO TÓM TẮT';
+      tgClone.mergeCells(1, reportCol, 1, reportCol + reportWidth - 1);
+      for (let c = reportCol; c <= reportCol + reportWidth - 1; c++){
+        const cc = tgClone.getCell(1, c);
+        cc.font = titleFont; cc.fill = titleFill;
+        cc.alignment = { horizontal:'center', vertical:'middle' };
+        cc.border = BORDER_THIN;
+      }
+      tgClone.getRow(1).height = 22;
+      pairs.forEach((p, i) => {
+        const lc = reportCol + i*2, vc = lc + 1;
+        const lCell = tgClone.getCell(2, lc);
+        lCell.value = p[0]; lCell.font = lblFont; lCell.fill = lblFill;
+        lCell.alignment = { horizontal:'center', vertical:'middle', wrapText:true };
+        lCell.border = BORDER_THIN;
+        tgClone.getColumn(lc).width = 26;
+        const vCell = tgClone.getCell(2, vc);
+        vCell.value = p[1]; vCell.font = valFont;
+        vCell.alignment = { horizontal:'center', vertical:'middle' };
+        vCell.border = BORDER_THIN;
+        tgClone.getColumn(vc).width = 10;
+      });
+      tgClone.getRow(2).height = 40;
+
+      // ---- Step B: Thuoctinh_TieuChiMoi = FULL clone of ThuocTinh(new) + 11 cols from AC ----
+      // (classCol + V,W,X..AD + comparison result; unmatched rows keep base data with blank appended cells)
+      if (newWorkbook.getWorksheet('Thuoctinh_TieuChiMoi')) newWorkbook.removeWorksheet(newWorkbook.getWorksheet('Thuoctinh_TieuChiMoi').id);
+      log('Đang tạo sheet Thuoctinh_TieuChiMoi…', 'info');
+      const thClone = cloneWorksheet(newWorkbook, thSheet2, 'Thuoctinh_TieuChiMoi');
+
+      const TG_COLS = [cfg.newClassCol, 22, 23, 24, 25, 26, 27, 28, 29, 30];
+      const TG_LABELS = {};
+      TG_LABELS[cfg.newClassCol] = classColLabel(cfg.newClassCol);
+      Object.assign(TG_LABELS, {
+        22: 'Chủ sử dụng / sở hữu', 23: 'Thửa đất', 24: 'Tài sản gắn liền với đất',
+        25: 'Giấy chứng nhận', 26: 'Giao dịch / biến động', 27: 'Hồ sơ quét / ký số',
+        28: 'Tham chiếu ĐVHC (cập nhật tự đồng lại)', 29: 'Số khối còn thiếu', 30: 'Số trường còn thiếu'
+      });
+      const GROUP_LABEL = 'THÔNG TIN CÒN THIẾU THEO KHỐI DỮ LIỆU (MÔ TẢ XML VNLIS)';
+      const APPEND_START = 29; // AC
+      const CMP_COL_TT = APPEND_START + TG_COLS.length; // 11th appended column
+
+      const tgLookup = new Map();
+      for (let r = cfg.newTgStart; r <= newTgDataEnd; r++){
+        const row = tgSheet2.getRow(r);
+        const k1 = cellText(row.getCell(cfg.newTgKey1)).trim();
+        const k2 = cellText(row.getCell(cfg.newTgKey2)).trim();
+        if (k1 === '' && k2 === '') continue;
+        const rec = {};
+        TG_COLS.forEach(c => { rec[c] = cellText(row.getCell(c)); });
+        tgLookup.set(k1 + '|' + k2, rec);
+      }
+
+      thClone.getCell(3, APPEND_START).value = TG_LABELS[cfg.newClassCol];
+      thClone.mergeCells(3, APPEND_START, 5, APPEND_START);
+      for (let rr = 3; rr <= 5; rr++) styleHeaderCell(thClone.getCell(rr, APPEND_START));
+
+      const groupStart = APPEND_START + 1;
+      const groupEnd = APPEND_START + TG_COLS.length - 1;
+      thClone.getCell(3, groupStart).value = GROUP_LABEL;
+      thClone.mergeCells(3, groupStart, 3, groupEnd);
+      for (let cc = groupStart; cc <= groupEnd; cc++) styleHeaderCell(thClone.getCell(3, cc));
+
+      TG_COLS.slice(1).forEach((col, i) => {
+        const cc = groupStart + i;
+        thClone.getCell(4, cc).value = TG_LABELS[col];
+        thClone.mergeCells(4, cc, 5, cc);
+        styleHeaderCell(thClone.getCell(4, cc));
+        styleHeaderCell(thClone.getCell(5, cc));
+      });
+
+      thClone.getCell(3, CMP_COL_TT).value = 'Kết quả so sánh phân loại (cũ – mới)';
+      thClone.mergeCells(3, CMP_COL_TT, 5, CMP_COL_TT);
+      for (let rr = 3; rr <= 5; rr++) styleHeaderCell(thClone.getCell(rr, CMP_COL_TT));
+      thClone.getColumn(CMP_COL_TT).width = 26;
+
+      let startNum = 29;
+      TG_COLS.forEach((col, i) => {
+        const cc = APPEND_START + i;
+        const cell = thClone.getCell(6, cc);
+        cell.value = startNum + i;
+        styleHeaderCell(cell);
+      });
+      thClone.getCell(6, CMP_COL_TT).value = startNum + TG_COLS.length;
+      styleHeaderCell(thClone.getCell(6, CMP_COL_TT));
+      for (let i = 0; i < TG_COLS.length; i++) thClone.getColumn(APPEND_START + i).width = 18;
+
+      let thMatched = 0, thUnmatched = 0;
+      for (let r = cfg.newThStart; r <= newThDataEnd; r++){
+        const row = thClone.getRow(r);
+        const k1 = cellText(row.getCell(cfg.newThKey1)).trim();
+        const k2 = cellText(row.getCell(cfg.newThKey2)).trim();
+        const key = k1 + '|' + k2;
+        const rec = tgLookup.get(key);
+        if (rec) thMatched++; else thUnmatched++;
+        TG_COLS.forEach((col, i) => {
+          const cc = APPEND_START + i;
+          const cell = thClone.getCell(r, cc);
+          cell.value = rec ? (rec[col] || '') : '';
+          cell.font = FONT_DATA; cell.alignment = ALIGN_DATA; cell.border = BORDER_THIN;
+        });
+        const cmp = perKeyComparison.get(key);
+        const cmpCell = thClone.getCell(r, CMP_COL_TT);
+        cmpCell.value = cmp ? cmp.text : '';
+        cmpCell.font = { name:'Times New Roman', size:11, bold:true, color: cmp ? cmp.color : { argb:'FF6B7280' } };
+        cmpCell.alignment = ALIGN_DATA; cmpCell.border = BORDER_THIN;
+      }
+      log('Thuoctinh_TieuChiMoi: khớp ' + thMatched + ' / ' + (newThDataEnd - cfg.newThStart + 1) + ' dòng với TongHop (mới).', thUnmatched > 0 ? 'info' : 'ok');
+
+      let commune = '';
+      try { commune = cellText(tgSheet2.getRow(cfg.newTgStart).getCell(2)).trim(); } catch(e){}
+      const safeCommune = sanitizeForFilename(commune);
+      outputName = safeCommune ? ('dulieu_tieuchimoi_xa_' + safeCommune + '.xlsx') : 'dulieu_tieuchimoi_xa.xlsx';
+
+      log('Đang tạo file Excel đầu ra…', 'info');
+      const buf = await newWorkbook.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      if (outputBlobUrl) URL.revokeObjectURL(outputBlobUrl);
+      outputBlobUrl = URL.createObjectURL(blob);
+      log('Hoàn tất. File sẵn sàng để tải xuống.', 'ok');
+
+      document.getElementById('t2StatTotal').textContent = totalNew;
+      document.getElementById('t2StatMatched').textContent = matchedKeys;
+      document.getElementById('t2StatUnmatched').textContent = unmatchedKeys;
+
+      breakdownEl.innerHTML = '';
+      const includedRow = document.createElement('div');
+      includedRow.className = 'breakdown-row';
+      includedRow.innerHTML = '<span class="k">Đưa vào báo cáo (sau lọc)</span><span class="v">' + includedCount + '</span>';
+      breakdownEl.appendChild(includedRow);
+      Array.from(breakdown.entries()).sort((a,b) => b[1]-a[1]).forEach(([k,v]) => {
+        const row = document.createElement('div');
+        row.className = 'breakdown-row ' + tagFor(k);
+        const kEl = document.createElement('span'); kEl.className = 'k'; kEl.textContent = k;
+        const vEl = document.createElement('span'); vEl.className = 'v'; vEl.textContent = v;
+        row.appendChild(kEl); row.appendChild(vEl);
+        breakdownEl.appendChild(row);
+      });
+
+      outFileNameEl.textContent = outputName;
+      resultPanel.classList.add('show');
+      resultPanel.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    }
+
+    downloadBtn.addEventListener('click', () => {
+      if (!outputBlobUrl) return;
+      const a = document.createElement('a');
+      a.href = outputBlobUrl; a.download = outputName || 'dulieu_tieuchimoi_xa.xlsx';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    });
+  })();
+
+})();
+</script>
+</body>
+</html>
