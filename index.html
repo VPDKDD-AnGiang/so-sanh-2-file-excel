@@ -113,6 +113,10 @@ const state = {
   useBackbone: 'yes',
   baseFile: 'A',
   dedupeBase: 'keep',
+  mergeColumns: [],
+  mergeSeparator: ' | ',
+  mergeUnique: 'yes',
+  includeOtherRaw: 'no',
   selectedOutA: [],
   selectedOutB: [],
   result: null,
@@ -163,6 +167,24 @@ function colLabel(tag, columns, idx){
   return `[${tag}] ${col ? col.name : 'Cột '+(idx+1)}`;
 }
 function setError(msg){ state.error = msg; renderError(); }
+function isDataRow(row){ return row && !row.every(c=>c===''||c===null||c===undefined); }
+function makeKey(row, indexes){ return indexes.map(idx=>normalize(row[Number(idx)])).join('||'); }
+function hasCompleteKey(row, indexes){ return indexes.every(idx=>normalize(row[Number(idx)])!==''); }
+function buildGroups(file, keyIndexes){
+  const groups = new Map();
+  file.rawRows.slice(file.dataStartRow-1).filter(isDataRow).forEach(row=>{
+    if(!hasCompleteKey(row,keyIndexes)) return;
+    const key = makeKey(row,keyIndexes);
+    if(!groups.has(key)) groups.set(key,[]);
+    groups.get(key).push(row);
+  });
+  return groups;
+}
+function joinedValues(rows, idx){
+  const values = rows.map(row=>row[Number(idx)] ?? '').map(v=>String(v).trim()).filter(Boolean);
+  const output = state.mergeUnique==='yes' ? [...new Set(values)] : values;
+  return output.join(state.mergeSeparator);
+}
 
 // ---------- render dispatcher ----------
 function render(){
@@ -317,6 +339,35 @@ function tplStep4(){
           <button class="choice ${state.dedupeBase==='remove'?'selDark':''}" data-action="setDedupe" data-value="remove">Xóa dòng trùng (chỉ giữ dòng đầu tiên theo khóa)</button>
         </div>
       </div>
+      <div class="panel">
+        <p style="font-weight:600;margin:0 0 6px;">Cột nối giá trị khi trùng khóa</p>
+        <p class="help">Chọn các cột cần gom thành một giá trị khi một khóa có nhiều dòng trong File A hoặc File B. Mỗi cột chọn sẽ được thêm thành cột riêng ở kết quả. Mặc định kết quả chỉ gồm toàn bộ cột file nền và đúng các cột nối đã chọn.</p>
+        <div class="row">
+          <div class="col">
+            <span class="tag a">File A — cột cần nối</span>
+            <div class="outcols">${columnsA.map(c=>`<label><input type="checkbox" data-action="toggleMergeCol" data-which="A" data-idx="${c.index}" ${state.mergeColumns.some(x=>x.tag==='A' && x.idx===c.index)?'checked':''}>${esc(c.name)}</label>`).join('')}</div>
+          </div>
+          <div class="col">
+            <span class="tag b">File B — cột cần nối</span>
+            <div class="outcols">${columnsB.map(c=>`<label><input type="checkbox" data-action="toggleMergeCol" data-which="B" data-idx="${c.index}" ${state.mergeColumns.some(x=>x.tag==='B' && x.idx===c.index)?'checked':''}>${esc(c.name)}</label>`).join('')}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:end;margin-top:12px;">
+          <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;">Ký tự ngăn cách
+            <input type="text" value="${esc(state.mergeSeparator)}" maxlength="20" style="width:150px;" data-action="mergeSeparator">
+          </label>
+          <div>
+            <div style="font-size:12px;margin-bottom:4px;">Giá trị lặp trong cùng khóa</div>
+            <button class="choice ${state.mergeUnique==='yes'?'selDark':''}" data-action="setMergeUnique" data-value="yes">Chỉ giữ giá trị duy nhất</button>
+            <button class="choice ${state.mergeUnique==='no'?'selDark':''}" data-action="setMergeUnique" data-value="no">Giữ cả giá trị lặp</button>
+          </div>
+        </div>
+        <div style="margin-top:12px;">
+          <div style="font-size:12px;margin-bottom:4px;">Cột gốc của file không làm nền</div>
+          <button class="choice ${state.includeOtherRaw==='no'?'selDark':''}" data-action="setIncludeOtherRaw" data-value="no">Không hiển thị — chỉ dùng cột nối</button>
+          <button class="choice ${state.includeOtherRaw==='yes'?'selDark':''}" data-action="setIncludeOtherRaw" data-value="yes">Hiển thị tất cả cột gốc (dòng khớp đầu tiên)</button>
+        </div>
+      </div>
       <div class="actions">
         <button class="nav ghost" data-action="goto" data-step="3">← Quay lại</button>
         <button class="nav" data-action="run" ${canRun?'':'disabled'}>Chạy đối soát →</button>
@@ -399,27 +450,25 @@ function runMerge(){
     const baseCols = state.baseFile==='A' ? getColumns(state.fileA) : getColumns(state.fileB);
     const otherCols = state.baseFile==='A' ? getColumns(state.fileB) : getColumns(state.fileA);
     const baseSelected = baseCols.map(c=>c.index);
-    const otherSelected = otherCols.map(c=>c.index);
+    // Chỉ đưa cột gốc của file đối chiếu vào kết quả khi người dùng yêu cầu.
+    // Các cột được tick ở "Cột nối giá trị" luôn được xử lý riêng bên dưới.
+    const otherSelected = state.includeOtherRaw==='yes' ? otherCols.map(c=>c.index) : [];
     const baseKeyIdx = state.keySlots.map(s=> state.baseFile==='A' ? s.aCol : s.bCol);
     const otherKeyIdx = state.keySlots.map(s=> state.baseFile==='A' ? s.bCol : s.aCol);
 
-    const otherRows = other.rawRows.slice(other.dataStartRow-1);
-    const otherMap = new Map();
-    otherRows.forEach(row=>{
-      if(!row || row.every(c=>c===''||c===null||c===undefined)) return;
-      const key = otherKeyIdx.map(idx=>normalize(row[Number(idx)])).join('||');
-      if(!otherMap.has(key)) otherMap.set(key,row);
-    });
+    const baseGroups = buildGroups(base, baseKeyIdx);
+    const otherGroups = buildGroups(other, otherKeyIdx);
 
     let baseRows = base.rawRows.slice(base.dataStartRow-1);
-    baseRows = baseRows.filter(row=> row && !row.every(c=>c===''||c===null||c===undefined));
+    baseRows = baseRows.filter(isDataRow);
 
     let duplicateCount = 0;
     if(state.dedupeBase==='remove'){
       const seen = new Set();
       const deduped = [];
       baseRows.forEach(row=>{
-        const key = baseKeyIdx.map(idx=>normalize(row[Number(idx)])).join('||');
+        const key = makeKey(row,baseKeyIdx);
+        if(!hasCompleteKey(row,baseKeyIdx)){ deduped.push(row); return; }
         if(seen.has(key)){ duplicateCount++; } else { seen.add(key); deduped.push(row); }
       });
       baseRows = deduped;
@@ -428,13 +477,20 @@ function runMerge(){
     let matchedCount = 0;
     const rows = [];
     baseRows.forEach(row=>{
-      const key = baseKeyIdx.map(idx=>normalize(row[Number(idx)])).join('||');
-      const matchRow = otherMap.get(key);
-      if(matchRow) matchedCount++;
+      const key = makeKey(row,baseKeyIdx);
+      const matchedRows = hasCompleteKey(row,baseKeyIdx) ? (otherGroups.get(key) || []) : [];
+      const matchRow = matchedRows[0];
+      if(matchedRows.length) matchedCount++;
       const obj = {};
       baseSelected.forEach(idx=>{ obj[colLabel(state.baseFile, baseCols, idx)] = row[idx] ?? ''; });
       otherSelected.forEach(idx=>{ obj[colLabel(state.baseFile==='A'?'B':'A', otherCols, idx)] = matchRow ? (matchRow[idx] ?? '') : ''; });
-      obj['Trạng thái liên kết'] = matchRow ? 'Tìm thấy liên kết' : 'Không có liên kết';
+      state.mergeColumns.forEach(item=>{
+        const isBaseColumn = item.tag===state.baseFile;
+        const sourceRows = isBaseColumn ? (baseGroups.get(key) || []) : matchedRows;
+        const sourceCols = item.tag==='A' ? getColumns(state.fileA) : getColumns(state.fileB);
+        obj[`${colLabel(item.tag, sourceCols, item.idx)} (nối giá trị)`] = joinedValues(sourceRows,item.idx);
+      });
+      obj['Trạng thái liên kết'] = matchedRows.length ? 'Tìm thấy liên kết' : 'Không có liên kết';
       rows.push(obj);
     });
 
@@ -447,23 +503,18 @@ function runMerge(){
     const driverKeyIdx = state.keySlots.map(s=>s.aCol);
     const targetKeyIdx = state.keySlots.map(s=>s.bCol);
 
-    const targetRows = target.rawRows.slice(target.dataStartRow-1);
-    const targetMap = new Map();
-    targetRows.forEach(row=>{
-      if(!row || row.every(c=>c===''||c===null||c===undefined)) return;
-      const key = targetKeyIdx.map(idx=>normalize(row[Number(idx)])).join('||');
-      if(!targetMap.has(key)) targetMap.set(key,row);
-    });
+    const targetGroups = buildGroups(target, targetKeyIdx);
 
     let driverRows = driver.rawRows.slice(driver.dataStartRow-1);
-    driverRows = driverRows.filter(row=> row && !row.every(c=>c===''||c===null||c===undefined));
+    driverRows = driverRows.filter(isDataRow);
 
     let duplicateCount = 0;
     if(state.dedupeBase==='remove'){
       const seen = new Set();
       const deduped = [];
       driverRows.forEach(row=>{
-        const key = driverKeyIdx.map(idx=>normalize(row[Number(idx)])).join('||');
+        const key = makeKey(row,driverKeyIdx);
+        if(!hasCompleteKey(row,driverKeyIdx)){ deduped.push(row); return; }
         if(seen.has(key)){ duplicateCount++; } else { seen.add(key); deduped.push(row); }
       });
       driverRows = deduped;
@@ -472,8 +523,8 @@ function runMerge(){
     let matchedCount = 0;
     const rows = [];
     driverRows.forEach(row=>{
-      const key = driverKeyIdx.map(idx=>normalize(row[Number(idx)])).join('||');
-      const matchRow = targetMap.get(key);
+      const key = makeKey(row,driverKeyIdx);
+      const matchRow = hasCompleteKey(row,driverKeyIdx) ? (targetGroups.get(key) || [])[0] : undefined;
       if(!matchRow) return;
       matchedCount++;
       const obj = {};
@@ -532,6 +583,10 @@ document.addEventListener('click', e=>{
     state.useBackbone = t.dataset.value; render();
   } else if(action==='setDedupe'){
     state.dedupeBase = t.dataset.value; render();
+  } else if(action==='setMergeUnique'){
+    state.mergeUnique = t.dataset.value; render();
+  } else if(action==='setIncludeOtherRaw'){
+    state.includeOtherRaw = t.dataset.value; render();
   } else if(action==='run'){
     runMerge();
   } else if(action==='export'){
@@ -553,6 +608,7 @@ document.addEventListener('change', async e=>{
       if(which==='A') state.fileA = upd; else state.fileB = upd;
       state.keySlots = [{aCol:'',bCol:''}];
       state.useBackbone = 'yes'; state.baseFile = 'A'; state.dedupeBase = 'keep';
+      state.mergeColumns = []; state.mergeSeparator = ' | '; state.mergeUnique = 'yes'; state.includeOtherRaw = 'no';
       state.selectedOutA = []; state.selectedOutB = [];
       state.result = null; state.error = '';
     }catch(err){
@@ -573,6 +629,13 @@ document.addEventListener('change', async e=>{
     const arr = t.dataset.which==='A' ? state.selectedOutA : state.selectedOutB;
     const pos = arr.indexOf(idx);
     if(pos>-1) arr.splice(pos,1); else arr.push(idx);
+  } else if(action==='toggleMergeCol'){
+    const tag = t.dataset.which;
+    const idx = Number(t.dataset.idx);
+    const pos = state.mergeColumns.findIndex(x=>x.tag===tag && x.idx===idx);
+    if(pos>-1) state.mergeColumns.splice(pos,1); else state.mergeColumns.push({tag,idx});
+  } else if(action==='mergeSeparator'){
+    state.mergeSeparator = t.value;
   }
 });
 
